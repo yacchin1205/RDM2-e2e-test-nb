@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+.pyenv/
+.python-version
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test outputs and reports
+*.log
+*.har
+last-screenshots/
+test-results/
+reports/
+
+# Config files with secrets
+*.config.yaml
+!*.config.sample.yaml
+.env
+.env.*
+
+# Temporary files
+*.tmp
+*.temp
+.trashed/

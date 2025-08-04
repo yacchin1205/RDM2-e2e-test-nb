@@ -1,5 +1,7 @@
 # GRDM 結合試験の機械化について
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/RCOSDP/RDM-e2e-test-nb/HEAD)
+
 ## 概要
 
 本ドキュメントは、GRDM 結合試験の機械化について、アーキテクチャおよび利用方法について記載しています。
@@ -261,10 +263,10 @@ GRDMには、一般的なGUI操作を行うためのユーティリティ関数�
 
 1. **必要なツールのインストール**
    ```bash
-   # Homebrewを使用する場合（macOS/Linux）
+   # macOSの場合
    brew install gitleaks
    
-   # pipを使用してpre-commitをインストール
+   # pre-commitをインストール
    pip install pre-commit
    ```
 

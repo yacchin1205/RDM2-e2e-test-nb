@@ -4,5 +4,5 @@ repos:
     hooks:
       - id: gitleaks
         name: Detect secrets
-        entry: gitleaks protect --verbose --redact --staged
+        entry: gitleaks protect --verbose --redact --staged --config .gitleaks.toml
         pass_filenames: false
