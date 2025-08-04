@@ -1,4 +1,15 @@
 repos:
+  # Clean notebook metadata
+  - repo: local
+    hooks:
+      - id: clean-notebook-metadata
+        name: Clean notebook metadata
+        entry: python scripts/clean_notebook_metadata.py
+        language: system
+        files: '\.ipynb$'
+        pass_filenames: true
+
+  # Detect secrets
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2
     hooks:
