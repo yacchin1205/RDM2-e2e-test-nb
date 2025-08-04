@@ -5,3 +5,8 @@ useDefault = true
 id = "email-address"
 description = "Detects email addresses"
 regex = '''[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'''
+
+[[rules]]
+id = "rdm-nii-url"
+description = "Detects rdm.nii.ac.jp URLs"
+regex = '''https?://[^/]*rdm\.nii\.ac\.jp[^\s'"]*'''
