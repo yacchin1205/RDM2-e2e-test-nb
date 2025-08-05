@@ -31,7 +31,7 @@ reports/
 
 # Config files with secrets
 *.config.yaml
-!*.config.sample.yaml
+*.config.sample.yaml
 .env
 .env.*
 
