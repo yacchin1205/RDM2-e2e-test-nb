@@ -55,7 +55,9 @@ async def login_as_admin(page, idp_name, idp_username, idp_password, transition_
 async def login(page, idp_name, idp_username, idp_password, transition_timeout=30000):
     if idp_name is None:
         # CASでログイン
-        await page.locator('//button[text() = "ログイン"]').click()
+        if '/login' not in page.url:
+            # 現在CAS以外→一旦ログインボタンを押す
+            await page.locator('//button[text() = "ログイン"]').click()
         await login_cas(page, idp_username, idp_password)
         return
     try:

@@ -48,7 +48,7 @@ async def run_pw(f, last_path=default_last_path, screenshot=True, permissions=No
         current_pages.append(await current_context.new_page())
 
     current_time = time.time()
-    print(f"Start epoch: {current_time} seconds ({datetime.fromtimestamp(current_time)})")
+    print(f'Start epoch: {current_time} seconds')
     if permissions is not None:
         await current_context.grant_permissions(permissions)
     next_page = None
@@ -77,11 +77,17 @@ async def close_latest_page(last_path=None):
         raise Exception('It is only possible to close when two or more contexts or pages are stacked')
     os.makedirs(last_path or default_last_path, exist_ok=True)
     last_page = current_pages[-1]
+    if last_page in current_pages[:-1] or any([last_page in p for _, p in current_contexts[:-1]]):
+        # まだインスタンスがページ一覧に存在する場合は、スタックから削除するだけ
+        assert len(current_pages) > 0, current_pages
+        current_contexts[-1] = (current_context, current_pages[:-1])
+        return
     video_path = await last_page.video.path()
     index = len(current_pages)
     dest_video_path = os.path.join(last_path or default_last_path, f'video-{index}.webm')
     shutil.copyfile(video_path, dest_video_path)
     current_pages = current_pages[:-1]
+    current_contexts[-1] = (current_context, current_pages)
     await last_page.close()
     if len(current_pages) > 0:
         return
