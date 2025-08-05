@@ -56,7 +56,7 @@ def main():
             print(f"Warning: {filepath} is not a valid notebook file or doesn't exist")
     
     print(f"\nCleaned {total_cleaned} notebook(s)")
-    return 0 if total_cleaned > 0 else 1
+    return 0
 
 if __name__ == '__main__':
     sys.exit(main())
