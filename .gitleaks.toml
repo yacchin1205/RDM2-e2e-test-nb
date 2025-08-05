@@ -3,7 +3,8 @@ useDefault = true
 
 [allowlist]
 paths = [
-    '''scripts/replace_rdm_url\.py'''
+    '''scripts/replace_rdm_url\.py''',
+    '''.*\.md'''
 ]
 
 [[rules]]
