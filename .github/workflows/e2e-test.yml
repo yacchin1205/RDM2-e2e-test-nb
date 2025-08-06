@@ -249,44 +249,31 @@ jobs:
         test_endpoint "MFR (port 7778)" "http://localhost:7778/status"
         test_endpoint "FakeCAS (port 8080)" "http://localhost:8080/login"
 
-    - name: Create test users
+    - name: Create test users and projects
       working-directory: RDM-osf.io
       run: |
-        # Create test users using Django shell
-        docker-compose exec -T web python3 manage.py shell << 'EOF'
-        from osf.models import OSFUser
-        from django.utils import timezone
+        # Copy the setup script to the container
+        docker cp ../.github/scripts/setup_test_data.py "$(docker-compose ps -q web)":/tmp/setup_test_data.py
+        # Execute the script and capture project IDs
+        docker-compose exec -T web python3 manage.py shell < /tmp/setup_test_data.py | tee /tmp/setup_output.txt
         
-        # Create test users
-        test_users = [
-            {'username': 'testuser1@example.com', 'fullname': 'Test User 1', 'password': 'testpass123'},
-            {'username': 'testuser2@example.com', 'fullname': 'Test User 2', 'password': 'testpass456'}
-        ]
+        # Extract project IDs from output
+        PROJECT_ID_1=$(grep "PROJECT_ID_testuser1@example.com:" /tmp/setup_output.txt | cut -d' ' -f2)
+        PROJECT_ID_2=$(grep "PROJECT_ID_testuser2@example.com:" /tmp/setup_output.txt | cut -d' ' -f2)
         
-        for user_data in test_users:
-            username = user_data['username']
-            if not OSFUser.objects.filter(username=username).exists():
-                # Create user manually instead of using create_user
-                user = OSFUser(
-                    username=username,
-                    fullname=user_data['fullname'],
-                    is_active=True,
-                    date_registered=timezone.now()
-                )
-                user.set_password(user_data['password'])
-                user.save()
-                # Set additional fields after save
-                user.is_registered = True
-                user.date_confirmed = timezone.now()
-                user.have_email = True
-                user.save()
-                
-                # Create email for the user
-                user.emails.create(address=username)
-                print(f"Created test user: {username}")
-            else:
-                print(f"Test user already exists: {username}")
-        EOF
+        # Verify project IDs were created
+        if [ -z "${PROJECT_ID_1}" ] || [ -z "${PROJECT_ID_2}" ]; then
+          echo "ERROR: Failed to create projects for test users"
+          echo "PROJECT_ID_1: ${PROJECT_ID_1}"
+          echo "PROJECT_ID_2: ${PROJECT_ID_2}"
+          exit 1
+        fi
+        
+        # Export for later steps
+        echo "PROJECT_ID_1=${PROJECT_ID_1}" >> $GITHUB_ENV
+        echo "PROJECT_ID_2=${PROJECT_ID_2}" >> $GITHUB_ENV
+        
+        echo "Project IDs created successfully: testuser1=${PROJECT_ID_1}, testuser2=${PROJECT_ID_2}"
 
     - name: Set up Python for E2E tests
       uses: actions/setup-python@v4
@@ -329,10 +316,10 @@ jobs:
         idp_username_2: 'testuser2@example.com'
         idp_password_2: 'testpass456'
         
-        # Test project URLs (will be created during tests)
-        rdm_project_url_1: 'http://localhost:5000/tvuxd/'
+        # Test project URLs (using created project IDs)
+        rdm_project_url_1: 'http://localhost:5000/${{ env.PROJECT_ID_1 }}/'
         rdm_project_name_1: 'test_login'
-        rdm_project_url_2: 'http://localhost:5000/xwz59/'
+        rdm_project_url_2: 'http://localhost:5000/${{ env.PROJECT_ID_2 }}/'
         
         # Test settings
         skip_failed_test: ${{ github.event.inputs.skip_failed || 'true' }}
@@ -347,6 +334,10 @@ jobs:
         storages_oauth: []
         storages_s3: []
         EOF
+        
+        # Display the generated configuration for debugging
+        echo "Generated CI configuration:"
+        cat ci.config.yaml
 
     - name: Create result directory
       working-directory: e2e-tests
