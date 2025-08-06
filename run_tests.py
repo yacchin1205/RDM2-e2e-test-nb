@@ -11,19 +11,21 @@ import yaml
 import argparse
 import tempfile
 import traceback
+import subprocess
 from datetime import datetime
 import papermill as pm
 import nbformat
 
 
 class TestRunner:
-    def __init__(self, config_path):
+    def __init__(self, config_path, show_disk_usage=False):
         self.config_path = config_path
         self.config = None
         self.work_dir = tempfile.mkdtemp()
         self.result_dir = None
         self.result_notebooks = []
         self.local_vars = {}
+        self.show_disk_usage = show_disk_usage
         
         # Default configuration values
         self.rdm_url = 'https://rdm.example.com/'
@@ -114,6 +116,10 @@ class TestRunner:
         print(f'Running notebook: {base_notebook}')
         print(f'  Result: {result_notebook}')
         
+        # Show disk usage before test if enabled
+        if self.show_disk_usage:
+            subprocess.run(['df', '-h'])
+        
         try:
             pm.execute_notebook(
                 base_notebook,
@@ -126,6 +132,10 @@ class TestRunner:
                 raise
             print(f'  Status: FAILED (continuing)')
             traceback.print_exc()
+        
+        # Show disk usage after test if enabled
+        if self.show_disk_usage:
+            subprocess.run(['df', '-h'])
             
         return result_notebook
         
@@ -364,11 +374,16 @@ def main():
         'config',
         help='Path to configuration YAML file'
     )
+    parser.add_argument(
+        '--show-disk-usage',
+        action='store_true',
+        help='Show disk usage before and after each test'
+    )
     
     args = parser.parse_args()
     
     # Create and run tests
-    runner = TestRunner(args.config)
+    runner = TestRunner(args.config, show_disk_usage=args.show_disk_usage)
     runner.load_config()
     runner.make_result_dir()
     
