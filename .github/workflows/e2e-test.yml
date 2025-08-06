@@ -176,6 +176,13 @@ jobs:
         # Run Django migrations after requirements installation
         echo "Running Django migrations..."
         docker-compose run --rm web python3 manage.py migrate
+        
+    - name: Enable feature flags
+      working-directory: RDM-osf.io
+      run: |
+        # Enable Metadata addon feature flag
+        echo "Enabling Metadata addon feature flag..."
+        docker-compose run --rm web python3 manage.py waffle_flag ember_edit_draft_registration_page --everyone
 
     - name: Start infrastructure services
       working-directory: RDM-osf.io
