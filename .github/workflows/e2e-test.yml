@@ -258,9 +258,11 @@ jobs:
         # Execute the script and capture project IDs
         docker-compose exec -T web bash -c "python3 manage.py shell < /tmp/setup_test_data.py" | tee /tmp/setup_output.txt
         
-        # Extract project IDs from output
+        # Extract project IDs and names from output
         PROJECT_ID_1=$(grep "PROJECT_ID_testuser1@example.com:" /tmp/setup_output.txt | cut -d' ' -f2)
         PROJECT_ID_2=$(grep "PROJECT_ID_testuser2@example.com:" /tmp/setup_output.txt | cut -d' ' -f2)
+        PROJECT_NAME_1=$(grep "PROJECT_NAME_testuser1@example.com:" /tmp/setup_output.txt | cut -d' ' -f2-)
+        PROJECT_NAME_2=$(grep "PROJECT_NAME_testuser2@example.com:" /tmp/setup_output.txt | cut -d' ' -f2-)
         
         # Verify project IDs were created
         if [ -z "${PROJECT_ID_1}" ] || [ -z "${PROJECT_ID_2}" ]; then
@@ -273,8 +275,12 @@ jobs:
         # Export for later steps
         echo "PROJECT_ID_1=${PROJECT_ID_1}" >> $GITHUB_ENV
         echo "PROJECT_ID_2=${PROJECT_ID_2}" >> $GITHUB_ENV
+        echo "PROJECT_NAME_1=${PROJECT_NAME_1}" >> $GITHUB_ENV
+        echo "PROJECT_NAME_2=${PROJECT_NAME_2}" >> $GITHUB_ENV
         
-        echo "Project IDs created successfully: testuser1=${PROJECT_ID_1}, testuser2=${PROJECT_ID_2}"
+        echo "Projects created successfully:"
+        echo "  testuser1: ${PROJECT_ID_1} - ${PROJECT_NAME_1}"
+        echo "  testuser2: ${PROJECT_ID_2} - ${PROJECT_NAME_2}"
 
     - name: Set up Python for E2E tests
       uses: actions/setup-python@v4
@@ -317,9 +323,9 @@ jobs:
         idp_username_2: 'testuser2@example.com'
         idp_password_2: 'testpass456'
         
-        # Test project URLs (using created project IDs)
+        # Test project URLs (using created project IDs and names)
         rdm_project_url_1: 'http://localhost:5000/${{ env.PROJECT_ID_1 }}/'
-        rdm_project_name_1: 'test_login'
+        rdm_project_name_1: '${{ env.PROJECT_NAME_1 }}'
         rdm_project_url_2: 'http://localhost:5000/${{ env.PROJECT_ID_2 }}/'
         
         # Test settings

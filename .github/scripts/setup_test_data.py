@@ -39,6 +39,7 @@ for user_data in test_users:
         print(f"Created test project: {project._id} for user: {username}")
         # Output for CI config
         print(f"PROJECT_ID_{username}: {project._id}")
+        print(f"PROJECT_NAME_{username}: {project.title}")
     else:
         print(f"Test user already exists: {username}")
         # Ensure existing user has at least one project
@@ -56,3 +57,4 @@ for user_data in test_users:
             project = user.nodes.filter(category='project').first()
         # Output for CI config
         print(f"PROJECT_ID_{username}: {project._id}")
+        print(f"PROJECT_NAME_{username}: {project.title}")
