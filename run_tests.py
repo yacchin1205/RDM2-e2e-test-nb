@@ -138,6 +138,7 @@ class TestRunner:
                 self.run_notebook(
                     'テスト手順-未ログイン.ipynb',
                     rdm_project_url_1=self.rdm_project_url_1,
+                    rdm_project_url_2=self.rdm_project_url_2,
                 )
             )
             
