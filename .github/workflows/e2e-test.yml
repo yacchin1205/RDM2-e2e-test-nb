@@ -400,8 +400,8 @@ jobs:
     - name: Run E2E tests
       working-directory: e2e-tests
       run: |
-        # Run the automated test runner
-        python run_tests.py ci.config.yaml
+        # Run the automated test runner with disk usage monitoring
+        python run_tests.py ci.config.yaml --show-disk-usage
 
     - name: Generate test report
       if: always()
