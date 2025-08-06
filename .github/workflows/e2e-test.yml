@@ -394,8 +394,13 @@ jobs:
     - name: Create result directory
       working-directory: e2e-tests
       run: |
-        mkdir -p result
-        mkdir -p test-artifacts
+        # Use /mnt for more disk space
+        mkdir -p /mnt/e2e-test-results
+        mkdir -p /mnt/e2e-test-artifacts
+        ln -s /mnt/e2e-test-results result
+        ln -s /mnt/e2e-test-artifacts test-artifacts
+        echo "Directories linked to /mnt"
+        df -h
 
     - name: Run E2E tests
       working-directory: e2e-tests
