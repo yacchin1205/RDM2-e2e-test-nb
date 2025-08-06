@@ -252,10 +252,23 @@ jobs:
     - name: Create test users and projects
       working-directory: RDM-osf.io
       run: |
+        # Debug: Show current directory and workspace
+        echo "Current directory: $(pwd)"
+        echo "GitHub workspace: ${{ github.workspace }}"
+        echo "Listing workspace contents:"
+        ls -la ${{ github.workspace }}/
+        echo "Listing .github directory:"
+        ls -la ${{ github.workspace }}/.github/ || echo ".github directory not found"
+        echo "Listing .github/scripts directory:"
+        ls -la ${{ github.workspace }}/.github/scripts/ || echo ".github/scripts directory not found"
+        
         # Copy the setup script to the container
-        docker cp ${{ github.workspace }}/.github/scripts/setup_test_data.py "$(docker-compose ps -q web)":/tmp/setup_test_data.py
+        CONTAINER_ID=$(docker-compose ps -q web)
+        echo "Container ID: ${CONTAINER_ID}"
+        docker cp ${{ github.workspace }}/.github/scripts/setup_test_data.py ${CONTAINER_ID}:/tmp/setup_test_data.py
+        
         # Execute the script and capture project IDs
-        docker-compose exec -T web python3 manage.py shell < /tmp/setup_test_data.py | tee /tmp/setup_output.txt
+        docker-compose exec -T web bash -c "python3 manage.py shell < /tmp/setup_test_data.py" | tee /tmp/setup_output.txt
         
         # Extract project IDs from output
         PROJECT_ID_1=$(grep "PROJECT_ID_testuser1@example.com:" /tmp/setup_output.txt | cut -d' ' -f2)
