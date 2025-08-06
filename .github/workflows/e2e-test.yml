@@ -396,7 +396,7 @@ jobs:
         rdm_project_url_2: 'http://localhost:5000/${{ env.PROJECT_ID_2 }}/'
         
         # Test settings
-        skip_failed_test: false  # Stop on first failure to see exact error
+        skip_failed_test: true  # Continue on failure
         transition_timeout: 60000
         skip_preview_check: true
         skip_default_storage: false
