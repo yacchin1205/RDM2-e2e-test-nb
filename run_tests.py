@@ -261,6 +261,28 @@ class TestRunner:
                 )
             )
             
+    def check_notebook_errors(self, notebook_path):
+        """Check a notebook for execution errors."""
+        notebook_errors = []
+        with open(notebook_path, 'r') as f:
+            nb = nbformat.read(f, as_version=nbformat.NO_CONVERT)
+        
+        for i, cell in enumerate(nb.cells):
+            if cell.cell_type == 'code' and 'outputs' in cell:
+                for output in cell.outputs:
+                    if output.get('output_type') == 'error':
+                        error_name = output.get('ename', 'Unknown')
+                        error_value = output.get('evalue', 'Unknown error')
+                        traceback = output.get('traceback', [])
+                        notebook_errors.append({
+                            'cell': i,
+                            'ename': error_name,
+                            'evalue': error_value,
+                            'traceback': traceback
+                        })
+        
+        return notebook_errors
+    
     def run_all_tests(self):
         """Run all configured tests."""
         print(f'Starting test run at {datetime.now()}')
@@ -281,31 +303,41 @@ class TestRunner:
             failed_notebooks = []
             
             for notebook_path in self.result_notebooks:
-                with open(notebook_path, 'r') as f:
-                    nb = nbformat.read(f, as_version=nbformat.NO_CONVERT)
-                
-                # Check if any cell has error output
-                notebook_errors = []
-                for i, cell in enumerate(nb.cells):
-                    if cell.cell_type == 'code' and 'outputs' in cell:
-                        for output in cell.outputs:
-                            if output.get('output_type') == 'error':
-                                # Error output structure: ename, evalue, traceback
-                                error_name = output.get('ename', 'Unknown')
-                                error_value = output.get('evalue', 'Unknown error')
-                                traceback = output.get('traceback', [])
-                                notebook_errors.append({
-                                    'cell': i,
-                                    'ename': error_name,
-                                    'evalue': error_value,
-                                    'traceback': traceback
-                                })
+                # Check main notebook for errors
+                notebook_errors = self.check_notebook_errors(notebook_path)
                 
                 if notebook_errors:
                     failed_notebooks.append({
                         'notebook': os.path.basename(notebook_path),
                         'errors': notebook_errors
                     })
+                
+                # Check sub-notebooks if this is a summary notebook
+                notebook_name = os.path.basename(notebook_path)
+                if not notebook_name.startswith('取りまとめ-'):
+                    continue
+                
+                result_dir = os.path.splitext(notebook_path)[0]
+                sub_notebooks_dir = os.path.join(result_dir, 'notebooks')
+                if not os.path.exists(sub_notebooks_dir):
+                    failed_notebooks.append({
+                        'notebook': notebook_name,
+                        'errors': [{'cell': -1, 'ename': 'DirectoryNotFound', 'evalue': f'Sub-notebooks directory not found: {sub_notebooks_dir}', 'traceback': []}]
+                    })
+                    continue
+                
+                for sub_notebook in os.listdir(sub_notebooks_dir):
+                    if not sub_notebook.endswith('.ipynb'):
+                        continue
+                    
+                    sub_notebook_path = os.path.join(sub_notebooks_dir, sub_notebook)
+                    sub_notebook_errors = self.check_notebook_errors(sub_notebook_path)
+                    
+                    if sub_notebook_errors:
+                        failed_notebooks.append({
+                            'notebook': f"{notebook_name} -> {sub_notebook}",
+                            'errors': sub_notebook_errors
+                        })
             
             if failed_notebooks:
                 error_msg = f"\nERROR: {len(failed_notebooks)} notebook(s) failed with errors:\n"
