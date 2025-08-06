@@ -253,7 +253,7 @@ jobs:
       working-directory: RDM-osf.io
       run: |
         # Copy the setup script to the container
-        docker cp ../.github/scripts/setup_test_data.py "$(docker-compose ps -q web)":/tmp/setup_test_data.py
+        docker cp ${{ github.workspace }}/.github/scripts/setup_test_data.py "$(docker-compose ps -q web)":/tmp/setup_test_data.py
         # Execute the script and capture project IDs
         docker-compose exec -T web python3 manage.py shell < /tmp/setup_test_data.py | tee /tmp/setup_output.txt
         
