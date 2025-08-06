@@ -155,6 +155,13 @@ jobs:
         echo "Waiting for supporting services to start..."
         sleep 20
 
+    - name: Compile translations
+      working-directory: RDM-osf.io
+      run: |
+        # Compile translation files for Japanese locale
+        docker-compose run --rm web pybabel compile -d ./website/translations
+        echo "Translation files compiled successfully"
+
     - name: Build and start assets
       working-directory: RDM-osf.io
       run: |
