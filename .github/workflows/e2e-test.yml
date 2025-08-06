@@ -374,7 +374,7 @@ jobs:
         rdm_project_url_2: 'http://localhost:5000/${{ env.PROJECT_ID_2 }}/'
         
         # Test settings
-        skip_failed_test: ${{ github.event.inputs.skip_failed || 'true' }}
+        skip_failed_test: false  # Stop on first failure to see exact error
         transition_timeout: 60000
         skip_preview_check: true
         skip_default_storage: false
@@ -399,15 +399,9 @@ jobs:
 
     - name: Run E2E tests
       working-directory: e2e-tests
-      env:
-        SKIP_FAILED_TEST: ${{ github.event.inputs.skip_failed || 'true' }}
       run: |
         # Run the automated test runner
-        if [[ "$SKIP_FAILED_TEST" == "true" ]]; then
-          python run_tests.py ci.config.yaml --skip-failed
-        else
-          python run_tests.py ci.config.yaml --no-skip-failed
-        fi
+        python run_tests.py ci.config.yaml
 
     - name: Generate test report
       if: always()

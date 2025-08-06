@@ -364,26 +364,12 @@ def main():
         'config',
         help='Path to configuration YAML file'
     )
-    parser.add_argument(
-        '--skip-failed',
-        action='store_true',
-        default=True,
-        help='Continue running tests even if some fail (default: True)'
-    )
-    parser.add_argument(
-        '--no-skip-failed',
-        dest='skip_failed',
-        action='store_false',
-        help='Stop on first test failure'
-    )
     
     args = parser.parse_args()
-    
     
     # Create and run tests
     runner = TestRunner(args.config)
     runner.load_config()
-    runner.skip_failed_test = args.skip_failed
     runner.make_result_dir()
     
     try:
