@@ -30,6 +30,29 @@ jobs:
     timeout-minutes: 120
 
     steps:
+    - name: Free up disk space
+      run: |
+        echo "Initial disk usage:"
+        df -h /
+        
+        # Remove unnecessary tools (saves ~35-47GB)
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        
+        # Clean apt cache
+        sudo apt-get clean
+        
+        # Remove swap file
+        sudo swapoff -a
+        sudo rm -f /swapfile
+        
+        echo "Disk usage after cleanup:"
+        df -h /
+        
     - name: Checkout test repository
       uses: actions/checkout@v4
       with:
@@ -119,10 +142,20 @@ jobs:
     - name: Install RDM requirements
       working-directory: RDM-osf.io
       run: |
+        echo "Disk usage before requirements installation:"
+        df -h /
+        
         # Install Python/Node requirements first
         docker-compose run --rm requirements
         docker-compose run --rm mfr_requirements  
         docker-compose run --rm wb_requirements
+        
+        # Clean up Docker after requirements installation
+        echo "Cleaning up Docker build cache..."
+        docker system prune -f --volumes
+        
+        echo "Disk usage after requirements installation and cleanup:"
+        df -h /
       timeout-minutes: 15
 
     - name: Run Django migrations
@@ -165,6 +198,9 @@ jobs:
     - name: Build and start assets
       working-directory: RDM-osf.io
       run: |
+        echo "Disk usage before assets build:"
+        df -h /
+        
         # Remove existing node_modules and start assets
         rm -rf ./node_modules || true
         docker-compose up -d assets
@@ -175,10 +211,21 @@ jobs:
         
         # Check assets container status
         docker-compose logs --tail 50 assets
+        
+        # Clean up Docker build cache after assets build
+        echo "Cleaning up Docker build cache..."
+        docker builder prune -f
+        docker image prune -f
+        
+        echo "Disk usage after assets build and cleanup:"
+        df -h /
 
     - name: Start main OSF services
       working-directory: RDM-osf.io
       run: |
+        echo "Disk usage before starting main services:"
+        df -h /
+        
         # Start the main OSF services
         docker-compose up -d wb_worker worker web api ember_osf_web
         
@@ -294,6 +341,26 @@ jobs:
       with:
         python-version: '3.12'
 
+    - name: Docker cleanup before tests
+      run: |
+        echo "Disk usage before Docker cleanup:"
+        df -h /
+        
+        # Remove stopped containers only (not running ones)
+        docker container prune -f
+        
+        # Remove dangling images only (not used ones)
+        docker image prune -f
+        
+        # Remove build cache
+        docker builder prune -f
+        
+        # Remove unused volumes (careful not to remove active ones)
+        docker volume prune -f
+        
+        echo "Disk usage after Docker cleanup:"
+        df -h /
+        
     - name: Install E2E test dependencies
       working-directory: e2e-tests
       run: |
