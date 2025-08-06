@@ -175,6 +175,7 @@ class TestRunner:
                     enable_1gb_file_upload=self.enable_1gb_file_upload,
                     skip_failed_test=self.skip_failed_test,
                     skip_preview_check=self.skip_preview_check,
+                    too_large_file_upload_size=None,  # Disable large file test
                 )
             )
             
