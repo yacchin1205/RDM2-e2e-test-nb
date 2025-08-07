@@ -42,6 +42,7 @@ class TestRunner:
         self.skip_metadata = False
         self.skip_admin = False
         self.enable_1gb_file_upload = False
+        self.skip_erad_completion_test = False
         
         # Storage configurations
         self.storages_oauth = [
@@ -236,6 +237,7 @@ class TestRunner:
                     idp_username_2=getattr(self, 'idp_username_2', None),
                     idp_password_2=getattr(self, 'idp_password_2', None),
                     skip_failed_test=self.skip_failed_test,
+                    skip_erad_completion_test=self.skip_erad_completion_test,
                 )
             )
             

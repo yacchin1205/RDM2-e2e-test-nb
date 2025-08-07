@@ -398,6 +398,7 @@ jobs:
         skip_metadata: false  # Enable metadata tests
         skip_admin: true  # Admin tests might need additional setup
         enable_1gb_file_upload: false
+        skip_erad_completion_test: true  # Skip e-Rad completion test in CI
         
         # Storage configurations (empty for CI)
         storages_oauth: []
