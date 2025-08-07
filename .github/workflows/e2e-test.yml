@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       rdm_branch:
-        description: 'RDM2-osf.io branch to test against'
+        description: 'RDM-osf.io branch to test against'
         required: false
-        default: 'feature/ui-tests'
+        default: 'develop'
       test_config:
         description: 'Test configuration file to use'
         required: false
@@ -58,11 +58,11 @@ jobs:
       with:
         path: e2e-tests
 
-    - name: Checkout RDM2-osf.io
+    - name: Checkout RDM-osf.io
       uses: actions/checkout@v4
       with:
-        repository: yacchin1205/RDM2-osf.io
-        ref: ${{ github.event.inputs.rdm_branch || 'feature/ui-tests' }}
+        repository: RCOSDP/RDM-osf.io
+        ref: ${{ github.event.inputs.rdm_branch || 'develop' }}
         path: RDM-osf.io
 
     - name: Configure Docker to use /mnt
