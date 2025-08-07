@@ -407,7 +407,7 @@ jobs:
         transition_timeout: 60000
         skip_preview_check: true
         skip_default_storage: false
-        skip_metadata: true  # Skip metadata tests for now
+        skip_metadata: false  # Enable metadata tests
         skip_admin: true  # Admin tests might need additional setup
         enable_1gb_file_upload: false
         
