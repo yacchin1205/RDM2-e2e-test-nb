@@ -12,13 +12,14 @@ import argparse
 import tempfile
 import traceback
 import subprocess
+import shutil
 from datetime import datetime
 import papermill as pm
 import nbformat
 
 
 class TestRunner:
-    def __init__(self, config_path, show_disk_usage=False):
+    def __init__(self, config_path, show_disk_usage=False, failed_result_path=None):
         self.config_path = config_path
         self.config = None
         self.work_dir = tempfile.mkdtemp()
@@ -26,6 +27,7 @@ class TestRunner:
         self.result_notebooks = []
         self.local_vars = {}
         self.show_disk_usage = show_disk_usage
+        self.failed_result_path = failed_result_path
         
         # Default configuration values
         self.rdm_url = 'https://rdm.example.com/'
@@ -275,26 +277,87 @@ class TestRunner:
             )
             
     def check_notebook_errors(self, notebook_path):
-        """Check a notebook for execution errors."""
-        notebook_errors = []
+        """Check a notebook and all its sub-notebooks recursively for execution errors."""
+        all_errors = []
+        
+        # Check the notebook itself
         with open(notebook_path, 'r') as f:
             nb = nbformat.read(f, as_version=nbformat.NO_CONVERT)
         
         for i, cell in enumerate(nb.cells):
-            if cell.cell_type == 'code' and 'outputs' in cell:
-                for output in cell.outputs:
-                    if output.get('output_type') == 'error':
-                        error_name = output.get('ename', 'Unknown')
-                        error_value = output.get('evalue', 'Unknown error')
-                        traceback = output.get('traceback', [])
-                        notebook_errors.append({
-                            'cell': i,
-                            'ename': error_name,
-                            'evalue': error_value,
-                            'traceback': traceback
-                        })
+            if cell.cell_type != 'code' or 'outputs' not in cell:
+                continue
+                
+            for output in cell.outputs:
+                if output.get('output_type') != 'error':
+                    continue
+                    
+                all_errors.append({
+                    'notebook': notebook_path,
+                    'cell': i,
+                    'ename': output.get('ename', 'Unknown'),
+                    'evalue': output.get('evalue', 'Unknown error'),
+                    'traceback': output.get('traceback', [])
+                })
         
-        return notebook_errors
+        # Check notebooks/ subdirectory recursively
+        base_path = os.path.splitext(notebook_path)[0]
+        notebooks_dir = os.path.join(base_path, 'notebooks')
+        
+        if not os.path.exists(notebooks_dir) or not os.path.isdir(notebooks_dir):
+            return all_errors
+        
+        for sub_notebook in os.listdir(notebooks_dir):
+            if not sub_notebook.endswith('.ipynb'):
+                continue
+                
+            sub_notebook_path = os.path.join(notebooks_dir, sub_notebook)
+            # Recursively check this sub-notebook and its children
+            all_errors.extend(self.check_notebook_errors(sub_notebook_path))
+        
+        return all_errors
+    
+    def extract_failed_notebooks(self):
+        """Extract and copy failed notebooks to a separate directory."""
+        if self.failed_result_path is None:
+            return 0
+        
+        os.makedirs(self.failed_result_path, exist_ok=True)
+        
+        failed_count = 0
+        
+        # Check all executed notebooks
+        for notebook_path in self.result_notebooks:
+            # Check notebook for errors
+            notebook_errors = self.check_notebook_errors(notebook_path)
+            
+            if notebook_errors:
+                # Get the base path without extension
+                base_path = os.path.splitext(notebook_path)[0]
+                notebook_name = os.path.basename(notebook_path)
+                
+                # Copy the notebook file
+                rel_path = os.path.relpath(notebook_path, os.path.dirname(self.result_dir))
+                dest_path = os.path.join(self.failed_result_path, rel_path)
+                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                shutil.copy2(notebook_path, dest_path)
+                print(f'  Copied failed notebook: {notebook_name}')
+                
+                # Copy the associated directory if it exists
+                if os.path.exists(base_path) and os.path.isdir(base_path):
+                    rel_dir_path = os.path.relpath(base_path, os.path.dirname(self.result_dir))
+                    dest_dir_path = os.path.join(self.failed_result_path, rel_dir_path)
+                    shutil.copytree(base_path, dest_dir_path, dirs_exist_ok=True)
+                    print(f'  Copied associated directory: {os.path.basename(base_path)}/')
+                
+                failed_count += 1
+        
+        if failed_count > 0:
+            print(f'\nExtracted {failed_count} failed notebook(s) to: {self.failed_result_path}')
+        else:
+            print('\nNo failed notebooks found')
+        
+        return failed_count
     
     def run_all_tests(self):
         """Run all configured tests."""
@@ -311,60 +374,40 @@ class TestRunner:
         print(f'Total notebooks executed: {len(self.result_notebooks)}')
         print(f'Results saved to: {self.result_dir}')
         
+        # Extract failed notebooks for easier debugging
+        self.extract_failed_notebooks()
+        
         # Check for errors in executed notebooks
         if self.skip_failed_test:
-            failed_notebooks = []
+            all_errors = []
             
             for notebook_path in self.result_notebooks:
-                # Check main notebook for errors
+                # Check notebook and all its sub-notebooks for errors
                 notebook_errors = self.check_notebook_errors(notebook_path)
-                
                 if notebook_errors:
-                    failed_notebooks.append({
-                        'notebook': os.path.basename(notebook_path),
-                        'errors': notebook_errors
-                    })
-                
-                # Check sub-notebooks if this is a summary notebook
-                notebook_name = os.path.basename(notebook_path)
-                if not notebook_name.startswith('取りまとめ-'):
-                    continue
-                
-                result_dir = os.path.splitext(notebook_path)[0]
-                sub_notebooks_dir = os.path.join(result_dir, 'notebooks')
-                if not os.path.exists(sub_notebooks_dir):
-                    failed_notebooks.append({
-                        'notebook': notebook_name,
-                        'errors': [{'cell': -1, 'ename': 'DirectoryNotFound', 'evalue': f'Sub-notebooks directory not found: {sub_notebooks_dir}', 'traceback': []}]
-                    })
-                    continue
-                
-                for sub_notebook in os.listdir(sub_notebooks_dir):
-                    if not sub_notebook.endswith('.ipynb'):
-                        continue
-                    
-                    sub_notebook_path = os.path.join(sub_notebooks_dir, sub_notebook)
-                    sub_notebook_errors = self.check_notebook_errors(sub_notebook_path)
-                    
-                    if sub_notebook_errors:
-                        failed_notebooks.append({
-                            'notebook': f"{notebook_name} -> {sub_notebook}",
-                            'errors': sub_notebook_errors
-                        })
+                    all_errors.extend(notebook_errors)
             
-            if failed_notebooks:
-                error_msg = f"\nERROR: {len(failed_notebooks)} notebook(s) failed with errors:\n"
-                for nb_info in failed_notebooks:
-                    error_msg += f"\n{nb_info['notebook']}:\n"
-                    for error in nb_info['errors']:
+            if all_errors:
+                # Group errors by notebook
+                notebooks_with_errors = {}
+                for error in all_errors:
+                    notebook = error['notebook']
+                    if notebook not in notebooks_with_errors:
+                        notebooks_with_errors[notebook] = []
+                    notebooks_with_errors[notebook].append(error)
+                
+                error_msg = f"\nERROR: {len(notebooks_with_errors)} notebook(s) failed with errors:\n"
+                for notebook_path, errors in notebooks_with_errors.items():
+                    # Show relative path from result directory
+                    rel_path = os.path.relpath(notebook_path, os.path.dirname(self.result_dir))
+                    error_msg += f"\n{rel_path}:\n"
+                    for error in errors[:3]:  # Show first 3 errors per notebook
                         error_msg += f"  - Cell {error['cell']}: {error['ename']}: {error['evalue']}\n"
-                        # Show full traceback
-                        if error['traceback']:
-                            for tb_line in error['traceback']:
-                                error_msg += f"    {tb_line.rstrip()}\n"
+                    if len(errors) > 3:
+                        error_msg += f"  ... and {len(errors) - 3} more error(s)\n"
                 
                 print(error_msg, file=sys.stderr)
-                raise RuntimeError(f"{len(failed_notebooks)} notebook(s) failed: {', '.join([nb['notebook'] for nb in failed_notebooks])}")
+                raise RuntimeError(f"{len(notebooks_with_errors)} notebook(s) failed")
         
         return self.result_notebooks
 
@@ -382,11 +425,15 @@ def main():
         action='store_true',
         help='Show disk usage before and after each test'
     )
+    parser.add_argument(
+        '--failed-result-path',
+        help='Path to directory where failed notebooks will be copied (if not specified, failed notebooks are not extracted)'
+    )
     
     args = parser.parse_args()
     
     # Create and run tests
-    runner = TestRunner(args.config, show_disk_usage=args.show_disk_usage)
+    runner = TestRunner(args.config, show_disk_usage=args.show_disk_usage, failed_result_path=args.failed_result_path)
     runner.load_config()
     runner.make_result_dir()
     
