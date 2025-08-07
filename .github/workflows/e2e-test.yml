@@ -462,18 +462,6 @@ jobs:
         path: e2e-tests/test-artifacts/
         retention-days: 30
 
-    - name: Upload screenshots and videos
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-media
-        path: |
-          e2e-tests/result/**/screenshots/
-          e2e-tests/result/**/videos/
-          e2e-tests/result/**/*.png
-          e2e-tests/result/**/*.mp4
-        retention-days: 7
-
     - name: Display final service status
       if: always()
       working-directory: RDM-osf.io
