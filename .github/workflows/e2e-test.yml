@@ -33,7 +33,7 @@ jobs:
     - name: Free up disk space
       run: |
         echo "Initial disk usage:"
-        df -h /
+        df -h
         
         # Remove unnecessary tools (saves ~35-47GB)
         sudo rm -rf /usr/share/dotnet
@@ -51,7 +51,7 @@ jobs:
         sudo rm -f /swapfile
         
         echo "Disk usage after cleanup:"
-        df -h /
+        df -h
         
     - name: Checkout test repository
       uses: actions/checkout@v4
@@ -349,9 +349,6 @@ jobs:
     - name: Install E2E test dependencies
       working-directory: e2e-tests
       run: |
-        echo "Disk usage before pip install:"
-        df -h /
-        
         # Install without cache to save disk space
         python -m pip install --upgrade pip
         pip install --no-cache-dir -r requirements.txt
@@ -359,9 +356,6 @@ jobs:
         
         # Clear pip cache if any remains
         pip cache purge || true
-        
-        echo "Disk usage after pip install:"
-        df -h /
 
     - name: Setup Node.js for Playwright
       uses: actions/setup-node@v4
@@ -370,14 +364,8 @@ jobs:
 
     - name: Install Playwright
       run: |
-        echo "Disk usage before Playwright installation:"
-        df -h /
-        
         # Install Playwright browsers with OS dependencies
         npx playwright install --with-deps chromium
-        
-        echo "Disk usage after Playwright installation:"
-        df -h /
 
     - name: Prepare test configuration
       working-directory: e2e-tests
@@ -425,14 +413,12 @@ jobs:
       run: |
         mkdir -p result
         mkdir -p test-artifacts
-        echo "Disk usage before tests:"
-        df -h
 
     - name: Run E2E tests
       working-directory: e2e-tests
       run: |
-        # Run the automated test runner with disk usage monitoring
-        python run_tests.py ci.config.yaml --show-disk-usage
+        # Run the automated test runner
+        python run_tests.py ci.config.yaml
 
     - name: Generate test report
       if: always()
