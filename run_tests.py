@@ -43,6 +43,7 @@ class TestRunner:
         self.skip_default_storage = False
         self.skip_metadata = False
         self.skip_admin = False
+        self.skip_login = False
         self.enable_1gb_file_upload = False
         self.skip_erad_completion_test = False
         
@@ -145,6 +146,10 @@ class TestRunner:
     def run_login_tests(self):
         """Run login-related tests."""
         print('\n=== Login Tests ===')
+        
+        if self.skip_login:
+            print('Skipping login tests (skip_login=true)')
+            return
         
         if hasattr(self, 'idp_name_1') and self.idp_name_1:
             self.result_notebooks.append(
