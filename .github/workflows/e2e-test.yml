@@ -231,12 +231,23 @@ jobs:
         rm -rf ./node_modules || true
         docker-compose up -d assets
         
+        # Start admin_assets if needed for admin tests
+        if [ "${{ matrix.test-group.name }}" = "admin" ]; then
+          echo "Starting admin_assets for admin tests..."
+          docker-compose up -d admin_assets
+        fi
+        
         # Wait for assets to build (this can take a while)
         echo "Waiting for assets to build..."
         sleep 120
         
         # Check assets container status
         docker-compose logs --tail 50 assets
+        
+        # Check admin_assets if running admin tests
+        if [ "${{ matrix.test-group.name }}" = "admin" ]; then
+          docker-compose logs --tail 50 admin_assets
+        fi
 
     - name: Start main OSF services
       working-directory: RDM-osf.io
@@ -244,10 +255,10 @@ jobs:
         # Start the main OSF services
         docker-compose up -d wb_worker worker web api ember_osf_web
         
-        # Start admin services if needed for admin tests
+        # Start admin service if needed for admin tests (admin_assets already started)
         if [ "${{ matrix.test-group.name }}" = "admin" ]; then
-          echo "Starting admin services for admin tests..."
-          docker-compose up -d admin admin_assets
+          echo "Starting admin service for admin tests..."
+          docker-compose up -d admin
         fi
         
         # Wait for services to start
