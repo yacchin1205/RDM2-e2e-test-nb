@@ -95,6 +95,12 @@ jobs:
         cp ./api/base/settings/local-dist.py ./api/base/settings/local.py
         cp ./docker-compose-dist.override.yml ./docker-compose.override.yml
         cp ./tasks/local-dist.py ./tasks/local.py
+        
+        # Create admin settings if running admin tests
+        if [ "${{ matrix.test-group.name }}" = "admin" ]; then
+          cp ./admin/base/settings/local-dist.py ./admin/base/settings/local.py
+          echo "ALLOWED_HOSTS = ['localhost']" >> ./admin/base/settings/local.py
+        fi
 
     - name: Create docker-compose override for NII Cloud Operation images
       working-directory: RDM-osf.io
