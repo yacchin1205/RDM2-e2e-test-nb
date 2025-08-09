@@ -287,6 +287,7 @@ class TestRunner:
                     timestamp_user=getattr(self, 'admin_timestamp_user', None),
                     quota_user_id=getattr(self, 'admin_quota_user_id', None),
                     entitlement_text=getattr(self, 'admin_entitlement_text', None),
+                    exclude_notebooks=self.exclude_notebooks,
                 )
             )
             
