@@ -25,7 +25,6 @@ for user_data in test_users:
         # Set superuser if specified
         if user_data.get('is_superuser', False):
             user.is_superuser = True
-            # TEST
             user.is_staff = True
         user.save()
         

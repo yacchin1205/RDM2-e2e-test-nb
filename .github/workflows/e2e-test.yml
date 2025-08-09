@@ -42,6 +42,19 @@ jobs:
             skip_metadata: true
             skip_default_storage: true
             skip_login: true
+            exclude_notebooks: |
+              テスト手順-管理者機能-ログイン可否設定.ipynb
+              テスト手順-管理者機能-ノード管理.ipynb
+              テスト手順-管理者機能-ユーザ管理.ipynb
+              テスト手順-管理者機能-機関設定.ipynb
+              テスト手順-管理者機能-RDMユーザメール.ipynb
+              テスト手順-管理者機能-RDM登録.ipynb
+              テスト手順-管理者機能-メンテナンスアラート.ipynb
+              テスト手順-管理者機能-アドオン利用制御.ipynb
+              テスト手順-管理者機能-利用統計.ipynb
+              テスト手順-管理者機能-アナウンス.ipynb
+              テスト手順-管理者機能-証跡管理.ipynb
+              テスト手順-管理者機能-NIIストレージのクォータ.ipynb
     name: E2E ${{ matrix.test-group.display_name }}
 
     steps:
@@ -442,6 +455,18 @@ jobs:
         storages_oauth: []
         storages_s3: []
         EOF
+        
+        # Add exclude_notebooks if specified
+        if [ -n "${{ matrix.test-group.exclude_notebooks }}" ]; then
+          echo "" >> ci.config.yaml
+          echo "# Exclude specific notebooks" >> ci.config.yaml
+          echo "exclude_notebooks:" >> ci.config.yaml
+          echo "${{ matrix.test-group.exclude_notebooks }}" | while read notebook; do
+            if [ -n "$notebook" ]; then
+              echo "  - '$notebook'" >> ci.config.yaml
+            fi
+          done
+        fi
         
         # Display the generated configuration for debugging
         echo "Generated CI configuration for ${{ matrix.test-group.display_name }}:"
