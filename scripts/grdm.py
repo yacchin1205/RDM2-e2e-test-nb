@@ -30,8 +30,8 @@ async def expect_idp_login(page, idp_name, timeout=30000):
     await expect(page.locator(login_page_locators['username'])).to_be_editable(timeout=timeout)
 
 async def login_as_admin(page, idp_name, idp_username, idp_password, transition_timeout=30000):
-    if idp_name is None:
-        # CASでログイン
+    if idp_name is None or idp_name == 'FakeCAS':
+        # CAS/FakeCASでログイン
         await page.locator('#id_email').fill(idp_username)
         await page.locator('#id_password').fill(idp_password)
         await page.locator('//button[text() = "サインイン"]').click()
