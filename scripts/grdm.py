@@ -35,9 +35,9 @@ async def login_as_admin(page, idp_name, idp_username, idp_password, transition_
         await page.locator('#id_email').fill(idp_username)
         await page.locator('#id_password').fill(idp_password)
         await page.locator('//button[text() = "サインイン"]').click()
+        await expect(page.locator('//*[@href="/account/logout/"]')).to_be_visible(timeout=transition_timeout)
         try:
             # 念のためツールバーを隠すボタンを押しておく - なければ無視
-            await expect(page.locator('#djHideToolBarButton')).to_be_visible(timeout=transition_timeout)
             await page.locator('#djHideToolBarButton').click()
         except:
             print('Skipped hiding toolbar')
