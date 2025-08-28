@@ -11,6 +11,26 @@ on:
         description: 'RDM-osf.io branch to test against'
         required: false
         default: 'develop'
+      osf_image:
+        description: 'Custom OSF image (default: niicloudoperation/rdm-osf.io:latest)'
+        required: false
+        default: ''
+      ember_image:
+        description: 'Custom Ember image (default: niicloudoperation/rdm-ember-osf-web:latest)'
+        required: false
+        default: ''
+      cas_image:
+        description: 'Custom CAS image (default: niicloudoperation/rdm-cas-overlay:latest)'
+        required: false
+        default: ''
+      mfr_image:
+        description: 'Custom MFR image (default: niicloudoperation/rdm-modular-file-renderer:latest)'
+        required: false
+        default: ''
+      wb_image:
+        description: 'Custom WaterButler image (default: niicloudoperation/rdm-waterbutler:latest)'
+        required: false
+        default: ''
       test_config:
         description: 'Test configuration file to use'
         required: false
@@ -118,24 +138,39 @@ jobs:
     - name: Create docker-compose override for NII Cloud Operation images
       working-directory: RDM-osf.io
       run: |
-        # Create docker-compose.override.yml with NII Cloud Operation images
-        cat > docker-compose.override.yml << 'EOL'
+        # Set default images
+        OSF_IMAGE="${{ github.event.inputs.osf_image || 'niicloudoperation/rdm-osf.io:latest' }}"
+        EMBER_IMAGE="${{ github.event.inputs.ember_image || 'niicloudoperation/rdm-ember-osf-web:latest' }}"
+        CAS_IMAGE="${{ github.event.inputs.cas_image || 'niicloudoperation/rdm-cas-overlay:latest' }}"
+        MFR_IMAGE="${{ github.event.inputs.mfr_image || 'niicloudoperation/rdm-modular-file-renderer:latest' }}"
+        WB_IMAGE="${{ github.event.inputs.wb_image || 'niicloudoperation/rdm-waterbutler:latest' }}"
+        
+        # Log the images being used
+        echo "Using Docker images:"
+        echo "  OSF: $OSF_IMAGE"
+        echo "  Ember: $EMBER_IMAGE"
+        echo "  CAS: $CAS_IMAGE"
+        echo "  MFR: $MFR_IMAGE"
+        echo "  WaterButler: $WB_IMAGE"
+        
+        # Create docker-compose.override.yml with configurable images
+        cat > docker-compose.override.yml << EOL
         # NII Cloud Operation images override
         services:
           fakecas:
             image: niicloudoperation/rdm-fakecas:latest
           admin:
-            image: niicloudoperation/rdm-osf.io:latest
+            image: ${OSF_IMAGE}
             environment:
               AWS_EC2_METADATA_DISABLED: "true"
           admin_assets:
-            image: niicloudoperation/rdm-osf.io:latest
+            image: ${OSF_IMAGE}
           api:
-            image: niicloudoperation/rdm-osf.io:latest
+            image: ${OSF_IMAGE}
           assets:
-            image: niicloudoperation/rdm-osf.io:latest
+            image: ${OSF_IMAGE}
           requirements:
-            image: niicloudoperation/rdm-osf.io:latest
+            image: ${OSF_IMAGE}
             command:
               - /bin/bash
               - -c
@@ -145,25 +180,25 @@ jobs:
                 rm -Rf /python3.6/* &&
                 cp -Rf -p /usr/lib/python3.6 /
           web:
-            image: niicloudoperation/rdm-osf.io:latest
+            image: ${OSF_IMAGE}
             environment:
               OAUTHLIB_INSECURE_TRANSPORT: '1'
           worker:
-            image: niicloudoperation/rdm-osf.io:latest
+            image: ${OSF_IMAGE}
           ember_osf_web:
-            image: niicloudoperation/rdm-ember-osf-web:latest
+            image: ${EMBER_IMAGE}
           cas:
-            image: niicloudoperation/rdm-cas-overlay:latest
+            image: ${CAS_IMAGE}
           mfr:
-            image: niicloudoperation/rdm-modular-file-renderer:latest
+            image: ${MFR_IMAGE}
           mfr_requirements:
-            image: niicloudoperation/rdm-modular-file-renderer:latest
+            image: ${MFR_IMAGE}
           wb:
-            image: niicloudoperation/rdm-waterbutler:latest
+            image: ${WB_IMAGE}
           wb_worker:
-            image: niicloudoperation/rdm-waterbutler:latest
+            image: ${WB_IMAGE}
           wb_requirements:
-            image: niicloudoperation/rdm-waterbutler:latest
+            image: ${WB_IMAGE}
         EOL
 
     - name: Setup host networking alias
