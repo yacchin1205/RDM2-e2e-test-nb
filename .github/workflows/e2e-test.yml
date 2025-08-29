@@ -574,6 +574,27 @@ jobs:
         # Run the automated test runner with failed notebook extraction
         python run_tests.py ci.config.yaml --failed-result-path result-failed
 
+    - name: Generate Excel summary
+      if: always()
+      working-directory: e2e-tests
+      run: |
+        # Generate Excel summary from test results
+        python .github/scripts/generate_excel_summary.py result/ "GitHub Actions" "${{ github.run_number }}"
+        
+        # List generated Excel files and screenshots
+        ls -la result/test-summary-*.xlsx || echo "No Excel summary generated"
+        ls -la result/screenshots/ || echo "No screenshots generated"
+
+    - name: Upload Excel summary with screenshots
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-summary-excel-${{ matrix.test-group.name }}
+        path: |
+          e2e-tests/result/test-summary-*.xlsx
+          e2e-tests/result/screenshots/
+        retention-days: 30
+
     - name: Upload failed test results
       if: always()
       uses: actions/upload-artifact@v4
