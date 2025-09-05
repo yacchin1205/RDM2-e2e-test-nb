@@ -293,10 +293,10 @@ jobs:
         # Start supporting services based on test group
         if [ "${{ matrix.test-group.name }}" = "admin" ]; then
           # Admin tests don't need mfr and sharejs
-          docker-compose up -d wb fakecas
+          docker-compose up -d wb cas
         else
           # User tests need all supporting services
-          docker-compose up -d mfr wb fakecas sharejs
+          docker-compose up -d mfr wb cas sharejs
         fi
         
         # Wait for services to be ready
@@ -425,7 +425,7 @@ jobs:
         test_endpoint "OSF API (port 8000)" "http://localhost:8000/v2/"
         test_endpoint "Ember OSF Web (port 4200)" "http://localhost:4200/"
         test_endpoint "WaterButler (port 7777)" "http://localhost:7777/status"
-        test_endpoint "FakeCAS (port 8080)" "http://localhost:8080/login"
+        test_endpoint "CAS (port 8080)" "http://localhost:8080/login"
         
         # Test MFR only for user tests (not needed for admin)
         if [ "${{ matrix.test-group.name }}" != "admin" ]; then
@@ -517,11 +517,11 @@ jobs:
         admin_rdm_url: 'http://localhost:8001/'
         
         # Test users (created above)
-        idp_name_1: 'FakeCAS'
+        idp_name_1: null
         idp_username_1: 'testuser1@example.com'
         idp_password_1: 'testpass123'
         
-        idp_name_2: 'FakeCAS'
+        idp_name_2: null
         idp_username_2: 'testuser2@example.com'
         idp_password_2: 'testpass456'
         
