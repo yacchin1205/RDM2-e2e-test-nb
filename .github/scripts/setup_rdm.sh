@@ -237,11 +237,11 @@ services:
   wb_requirements:
     image: ${wb_image}
   kaken_elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    image: opensearchproject/opensearch:3.3.1
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - plugins.security.disabled=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
       - "19200:9200"
   elasticsearch:
