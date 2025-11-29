@@ -71,6 +71,7 @@ jobs:
             skip_metadata: false
             minio_enabled: false
             weko_enabled: false
+            jupyterhub_enabled: false
           - name: admin
             display_name: "Admin Tests"
             include_admin: true
@@ -80,6 +81,7 @@ jobs:
             skip_login: true
             minio_enabled: false
             weko_enabled: false
+            jupyterhub_enabled: false
             exclude_notebooks: |
               テスト手順-管理者機能-ログイン可否設定.ipynb
               テスト手順-管理者機能-ノード管理.ipynb
@@ -119,6 +121,7 @@ jobs:
               テスト手順-管理者機能-NIIストレージのクォータ.ipynb
             minio_enabled: false
             weko_enabled: false
+            jupyterhub_enabled: false
           - name: user-minio
             display_name: "User Tests (MinIO)"
             include_admin: false
@@ -129,6 +132,7 @@ jobs:
             skip_130mb_upload: true
             minio_enabled: true
             weko_enabled: false
+            jupyterhub_enabled: false
           - name: user-weko
             display_name: "User Tests (WEKO)"
             include_admin: false
@@ -139,10 +143,23 @@ jobs:
             skip_130mb_upload: true
             minio_enabled: false
             weko_enabled: true
+            jupyterhub_enabled: false
+          - name: user-jupyterhub
+            display_name: "User Tests (JupyterHub)"
+            include_admin: false
+            skip_admin: true
+            skip_metadata: true
+            skip_default_storage: true
+            skip_login: true
+            skip_130mb_upload: true
+            minio_enabled: false
+            weko_enabled: false
+            jupyterhub_enabled: true
     name: E2E ${{ matrix.test-group.display_name }}
     env:
       MINIO_ENABLED: ${{ matrix.test-group.minio_enabled == true && 'true' || 'false' }}
       WEKO_ENABLED: ${{ matrix.test-group.weko_enabled == true && 'true' || 'false' }}
+      JUPYTERHUB_ENABLED: ${{ matrix.test-group.jupyterhub_enabled == true && 'true' || 'false' }}
       MINIO_ROOT_USER: e2eadmin
       MINIO_ROOT_PASSWORD: e2epassword123
       MINIO_ALIAS: ci-minio
@@ -677,6 +694,12 @@ jobs:
       run: |
         .github/scripts/setup_weko.sh install ../weko
 
+    - name: Install TLJH stack
+      if: env.JUPYTERHUB_ENABLED == 'true'
+      working-directory: e2e-tests
+      run: |
+        .github/scripts/setup_tljh.sh install
+
     - name: Run post-migration tests
       if: matrix.test-group.migration_from.post_migration_notebook != null
       working-directory: e2e-tests/migrations
@@ -925,11 +948,30 @@ jobs:
         path: e2e-tests/weko-docker-logs.txt
         retention-days: 7
 
+    - name: Collect TLJH logs
+      if: always() && env.JUPYTERHUB_ENABLED == 'true'
+      run: |
+        sudo journalctl -u jupyterhub > e2e-tests/jupyterhub-logs.txt 2>&1 || true
+
+    - name: Upload TLJH logs
+      if: always() && env.JUPYTERHUB_ENABLED == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: tljh-logs-${{ matrix.test-group.name }}
+        path: e2e-tests/jupyterhub-logs.txt
+        retention-days: 7
+
     - name: Stop WEKO stack
       if: always() && env.WEKO_ENABLED == 'true'
       working-directory: e2e-tests
       run: |
         .github/scripts/setup_weko.sh down ../weko
+
+    - name: Stop TLJH stack
+      if: always() && env.JUPYTERHUB_ENABLED == 'true'
+      working-directory: e2e-tests
+      run: |
+        .github/scripts/setup_tljh.sh down
 
     - name: Cleanup and save logs
       if: always()
