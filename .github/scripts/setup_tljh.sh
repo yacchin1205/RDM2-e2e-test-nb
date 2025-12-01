@@ -122,7 +122,7 @@ c.JupyterHub.tornado_settings = {
 EOF
 
     sudo systemctl restart jupyterhub
-    wait_for_url "http://localhost:8000"
+    wait_for_url "http://localhost"
     ;;
   down)
     sudo systemctl stop jupyterhub || true

@@ -448,7 +448,7 @@ jobs:
     - name: Install Playwright
       run: |
         # Install Playwright browsers with OS dependencies
-        playwright install --with-deps chromium
+        playwright install --with-deps chromium firefox
 
     - name: Create test data for migration source
       if: matrix.test-group.migration_from != null
@@ -700,6 +700,13 @@ jobs:
       run: |
         .github/scripts/setup_tljh.sh install
 
+    - name: Configure TLJH connection info
+      if: env.JUPYTERHUB_ENABLED == 'true'
+      run: |
+        echo "TLJH_URL=http://localhost" >> $GITHUB_ENV
+        echo "TLJH_USERNAME=admin" >> $GITHUB_ENV
+        echo "TLJH_PASSWORD=change-your-password" >> $GITHUB_ENV
+
     - name: Run post-migration tests
       if: matrix.test-group.migration_from.post_migration_notebook != null
       working-directory: e2e-tests/migrations
@@ -808,6 +815,9 @@ jobs:
         args=(ci.config.yaml base_ci.config.yaml)
         if [ "${MINIO_ENABLED}" = "true" ]; then
           args+=(--minio)
+        fi
+        if [ "${JUPYTERHUB_ENABLED}" = "true" ]; then
+          args+=(--jupyterhub)
         fi
 
         .github/scripts/generate_ci_config.sh "${args[@]}"
