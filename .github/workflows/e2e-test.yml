@@ -490,8 +490,8 @@ jobs:
         # Execute the notebook against the migration source environment
         papermill ${{ matrix.test-group.migration_from.initial_data_notebook }} \
           ../result/migration_initial_${{ matrix.test-group.migration_from.initial_data_notebook }} \
-          -p rdm_url "http://localhost:5000/" \
-          -p admin_rdm_url "http://localhost:8001/" \
+          -p rdm_url "http://192.168.168.167:5000/" \
+          -p admin_rdm_url "http://192.168.168.167:8001/" \
           -p idp_name_1 "FakeCAS" \
           -p idp_username_1 "testuser1@example.com" \
           -p idp_password_1 "testpass123" \
@@ -724,8 +724,8 @@ jobs:
         # Execute the post-migration test notebook
         papermill ${{ matrix.test-group.migration_from.post_migration_notebook }} \
           ../result/${{ matrix.test-group.migration_from.post_migration_notebook }} \
-          -p rdm_url "http://localhost:5000/" \
-          -p admin_rdm_url "http://localhost:8001/" \
+          -p rdm_url "http://192.168.168.167:5000/" \
+          -p admin_rdm_url "http://192.168.168.167:8001/" \
           -p idp_name_1 "FakeCAS" \
           -p idp_username_1 "testuser1@example.com" \
           -p idp_password_1 "testpass123" \
@@ -786,8 +786,8 @@ jobs:
       run: |
         cat > base_ci.config.yaml <<'EOF'
         # CI Test Configuration - ${{ matrix.test-group.display_name }}
-        rdm_url: 'http://localhost:5000/'
-        admin_rdm_url: 'http://localhost:8001/'
+        rdm_url: 'http://192.168.168.167:5000/'
+        admin_rdm_url: 'http://192.168.168.167:8001/'
         
         # Test users (created above)
         idp_name_1: 'FakeCAS'
@@ -799,9 +799,9 @@ jobs:
         idp_password_2: 'testpass456'
         
         # Test project URLs (using created project IDs and names)
-        rdm_project_url_1: 'http://localhost:5000/${{ env.PROJECT_ID_1 }}/'
+        rdm_project_url_1: 'http://192.168.168.167:5000/${{ env.PROJECT_ID_1 }}/'
         rdm_project_name_1: '${{ env.PROJECT_NAME_1 }}'
-        rdm_project_url_2: 'http://localhost:5000/${{ env.PROJECT_ID_2 }}/'
+        rdm_project_url_2: 'http://192.168.168.167:5000/${{ env.PROJECT_ID_2 }}/'
         
         # Test settings for ${{ matrix.test-group.name }} group
         skip_failed_test: true  # Continue on failure
