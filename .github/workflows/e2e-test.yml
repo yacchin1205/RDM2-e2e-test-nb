@@ -613,6 +613,11 @@ jobs:
           docker-compose logs --tail 50 admin_assets
         fi
 
+    - name: Register OAuth scopes
+      working-directory: RDM-osf.io
+      run: |
+        docker-compose run --rm web python3 -m scripts.register_oauth_scopes
+
     - name: Seed KAKEN Elasticsearch data
       working-directory: RDM-osf.io
       run: |
