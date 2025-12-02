@@ -224,6 +224,10 @@ services:
       KAKEN_ELASTIC_URI: http://kaken_elasticsearch:9200
   ember_osf_web:
     image: ${ember_image}
+    environment:
+      OSF_URL: http://192.168.168.167:5000/
+      OSF_API_URL: http://192.168.168.167:8000
+      OSF_FILE_URL: http://192.168.168.167:7777/
   cas:
     image: ${cas_image}
   mfr:
