@@ -209,3 +209,32 @@ async def _finish_pw_context(screenshot=False, last_path=None):
     if len(current_contexts) == 0:
         return
     await _finish_pw_context(screenshot=False, last_path=last_path)
+
+async def mock_clipboard(page):
+    """Mock navigator.clipboard for non-secure contexts."""
+    await page.evaluate("""
+        () => {
+            const clipboard = {
+                _mocked: true,
+                _text: null,
+                async writeText(text) {
+                    this._text = text;
+                },
+                async readText() {
+                    return this._text;
+                }
+            };
+            Object.defineProperty(navigator, 'clipboard', {
+                value: clipboard,
+                writable: true,
+                configurable: true
+            });
+        }
+    """)
+
+async def get_mocked_clipboard_text(page):
+    """Get text from the mocked clipboard."""
+    is_mocked = await page.evaluate("() => navigator.clipboard?._mocked")
+    if not is_mocked:
+        raise RuntimeError("Clipboard is not mocked. Call mock_clipboard(page) first.")
+    return await page.evaluate("() => navigator.clipboard._text")
