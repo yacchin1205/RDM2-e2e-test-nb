@@ -68,6 +68,8 @@ c.JupyterHub.services.extend(
             "name": "tljh_repo2docker",
             "url": "http://127.0.0.1:6789",
             "command": [
+                "env",
+                'REPO2DOCKER_RDM_PROVIDER_HOSTS=[{"hostname":["http://localhost:5000"],"api":"http://localhost:8000/v2/"}]',
                 sys.executable,
                 "-m",
                 "tljh_repo2docker",
