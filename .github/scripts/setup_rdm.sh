@@ -270,6 +270,10 @@ EOL
         fi
     done
 
+    # Add WaterButler DOMAIN for external access
+    echo "" >> .docker-compose.wb.env
+    echo "DOMAIN=http://192.168.168.167:7777" >> .docker-compose.wb.env
+
     if [ "${MINIO_ENABLED:-false}" = "true" ]; then
         local script_dir
         script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
