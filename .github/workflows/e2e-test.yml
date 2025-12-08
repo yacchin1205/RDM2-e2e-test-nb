@@ -714,10 +714,12 @@ jobs:
       run: |
         set -xeu
         echo "=== RDM to WEKO HTTPS Connection Verification ==="
-        for container in web wb; do
-          echo "Testing ${container}..."
-          docker-compose exec -T "${container}" python3 -c "import requests; print('CA bundle:', requests.certs.where()); r = requests.get('https://192.168.168.167', timeout=30); print('Status:', r.status_code)"
-        done
+        # web container uses requests (certifi)
+        echo "Testing web (requests)..."
+        docker-compose exec -T web python3 -c "import requests; print('CA bundle:', requests.certs.where()); r = requests.get('https://192.168.168.167', timeout=30); print('Status:', r.status_code)"
+        # wb container uses aiohttp (OpenSSL system certs)
+        echo "Testing wb (aiohttp)..."
+        cat "${{ github.workspace }}/e2e-tests/.github/scripts/verify_weko_https.py" | docker-compose exec -T wb python3
 
     - name: Install TLJH stack
       if: env.JUPYTERHUB_ENABLED == 'true'

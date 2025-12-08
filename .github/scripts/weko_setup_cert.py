@@ -11,28 +11,31 @@ import yaml
 
 CONTAINER_CERT_PATH = "/etc/ssl/certs/weko-ca.crt"
 
+# web/worker use requests library which uses certifi
+# wb/wb_worker use aiohttp which uses OpenSSL's set_default_verify_paths()
+# For aiohttp, we need to add cert to /etc/ssl/certs/ and run c_rehash
 SERVICE_CONFIG = {
     "web": {
         "command": "invoke server -h 0.0.0.0",
-        "ca_bundle": "/usr/lib/python3.6/site-packages/certifi/cacert.pem",
+        "cert_setup": f"cat {CONTAINER_CERT_PATH} >> /usr/lib/python3.6/site-packages/certifi/cacert.pem",
     },
     "worker": {
         "command": "invoke celery_worker",
-        "ca_bundle": "/usr/lib/python3.6/site-packages/certifi/cacert.pem",
+        "cert_setup": f"cat {CONTAINER_CERT_PATH} >> /usr/lib/python3.6/site-packages/certifi/cacert.pem",
     },
     "wb": {
         "command": "invoke server",
-        "ca_bundle": "/usr/local/lib/python3.6/site-packages/certifi/cacert.pem",
+        "cert_setup": "c_rehash /etc/ssl/certs",
     },
     "wb_worker": {
         "command": "invoke celery",
-        "ca_bundle": "/usr/local/lib/python3.6/site-packages/certifi/cacert.pem",
+        "cert_setup": "c_rehash /etc/ssl/certs",
     },
 }
 
 
 def add_weko_cert_config(data: dict, cert_path: Path) -> None:
-    """Add volume mount and command to append WEKO cert to system CA bundle."""
+    """Add volume mount and command to configure WEKO cert for SSL verification."""
     mount = f"{cert_path}:{CONTAINER_CERT_PATH}:ro"
 
     for service_name, config in SERVICE_CONFIG.items():
@@ -41,12 +44,12 @@ def add_weko_cert_config(data: dict, cert_path: Path) -> None:
         volumes = service.setdefault("volumes", [])
         volumes.append(mount)
 
-        ca_bundle = config["ca_bundle"]
+        cert_setup = config["cert_setup"]
         orig_command = config["command"]
         service["command"] = [
             "/bin/sh",
             "-c",
-            f"cat {CONTAINER_CERT_PATH} >> {ca_bundle} && {orig_command}",
+            f"{cert_setup} && {orig_command}",
         ]
 
 
