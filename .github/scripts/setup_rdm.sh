@@ -135,6 +135,7 @@ setup_config_files() {
     echo "ENABLE_MULTILINGUAL_SEARCH = True" >> ./website/settings/local.py
     echo "SEARCH_ANALYZER = defaults.SEARCH_ANALYZER_JAPANESE" >> ./website/settings/local.py
     echo "LOG_LEVEL = logging.DEBUG" >> ./website/settings/local.py
+    echo "DEBUG_MODE = False" >> ./website/settings/local.py
     # Configure external access via 192.168.168.167
     echo "" >> ./website/settings/local.py
     echo "# External access configuration for CI environment" >> ./website/settings/local.py
@@ -243,6 +244,8 @@ create_docker_override() {
 
     cat > docker-compose.override.yml << EOL
 # NII Cloud Operation images override
+# Using !override to use pre-built assets in the image directly
+# instead of mounting local code and running assets/requirements
 services:
   fakecas:
     image: niicloudoperation/rdm-fakecas:latest
@@ -252,33 +255,47 @@ services:
     environment:
       AWS_EC2_METADATA_DISABLED: "true"
       KAKEN_ELASTIC_URI: http://kaken_elasticsearch:9200
-  admin_assets:
-    image: ${osf_image}
+    volumes: !override
+      - ./website/settings/local.py:/code/website/settings/local.py:ro
+      - ./api/base/settings/local.py:/code/api/base/settings/local.py:ro
+      - ./admin/base/settings/local.py:/code/admin/base/settings/local.py:ro
+      - ./tasks/local.py:/code/tasks/local.py:ro
+      - ./addons:/code/addons:ro
   api:
     image: ${osf_image}
+    # --noreload is required because DEBUG_MODE=False triggers gevent monkey.patch_all()
+    # in api/base/wsgi.py, which conflicts with Django's autoreload mechanism
+    command: /bin/bash -c "DJANGO_SETTINGS_MODULE=api.base.settings python manage.py runserver 0.0.0.0:8000 --nothreading --noreload"
     environment:
       KAKEN_ELASTIC_URI: http://kaken_elasticsearch:9200
-  assets:
-    image: ${osf_image}
-  requirements:
-    image: ${osf_image}
-    command:
-      - /bin/bash
-      - -c
-      - apk add --no-cache --virtual .build-deps build-base linux-headers python3-dev musl-dev libxml2-dev libxslt-dev postgresql-dev libffi-dev libpng-dev freetype-dev jpeg-dev &&
-        invoke requirements --all &&
-        (python3 -m compileall /usr/lib/python3.6 || true) &&
-        rm -Rf /python3.6/* &&
-        cp -Rf -p /usr/lib/python3.6 /
+    volumes: !override
+      - ./website/settings/local.py:/code/website/settings/local.py:ro
+      - ./api/base/settings/local.py:/code/api/base/settings/local.py:ro
+      - ./tasks/local.py:/code/tasks/local.py:ro
+      - ./addons:/code/addons:ro
   web:
     image: ${osf_image}
     environment:
       OAUTHLIB_INSECURE_TRANSPORT: '1'
       KAKEN_ELASTIC_URI: http://kaken_elasticsearch:9200
+    volumes: !override
+      - ./website/settings/local.py:/code/website/settings/local.py:ro
+      - ./api/base/settings/local.py:/code/api/base/settings/local.py:ro
+      - ./tasks/local.py:/code/tasks/local.py:ro
+      - ./addons:/code/addons:ro
+      - ember_osf_web_dist_vol:/ember_osf_web
+      - preprints_dist_vol:/preprints
+      - registries_dist_vol:/registries
+      - reviews_dist_vol:/reviews
   worker:
     image: ${osf_image}
     environment:
       KAKEN_ELASTIC_URI: http://kaken_elasticsearch:9200
+    volumes: !override
+      - ./website/settings/local.py:/code/website/settings/local.py:ro
+      - ./api/base/settings/local.py:/code/api/base/settings/local.py:ro
+      - ./tasks/local.py:/code/tasks/local.py:ro
+      - ./addons:/code/addons:ro
   ember_osf_web:
     image: ${ember_image}
     environment:
@@ -381,47 +398,6 @@ enable_feature_flags() {
     echo "Feature flags enabled"
 }
 
-# Function to compile translations
-compile_translations() {
-    local include_admin="${INCLUDE_ADMIN:-false}"
-    
-    echo "Compiling translation files..."
-    docker-compose run --rm web pybabel compile -d ./website/translations
-    
-    if [ "$include_admin" = "true" ]; then
-        echo "Compiling admin translation files..."
-        docker-compose run --rm web pybabel compile -D django -d ./admin/translations
-    fi
-    
-    echo "Translation compilation completed"
-}
-
-# Function to start asset services after translations are compiled
-start_asset_services() {
-    local include_admin="${INCLUDE_ADMIN:-false}"
-    
-    # Start asset services
-    export SERVICES="assets"
-    echo "Starting asset services: $SERVICES"
-    start_services
-    
-    if [ "$include_admin" = "true" ]; then
-        # Start admin_assets separately to avoid volume conflicts
-        export SERVICES="admin_assets"
-        echo "Starting admin asset services: $SERVICES"
-        start_services
-    fi
-}
-
-# Function to install requirements
-install_requirements() {
-    echo "Installing requirements..."
-    docker-compose run --rm requirements
-    docker-compose run --rm mfr_requirements
-    docker-compose run --rm wb_requirements
-    echo "Requirements installation completed"
-}
-
 # Main execution if called directly with arguments
 if [ $# -gt 0 ]; then
     command="$1"
@@ -434,20 +410,11 @@ if [ $# -gt 0 ]; then
         create_docker_override)
             create_docker_override "$@"
             ;;
-        install_requirements)
-            install_requirements "$@"
-            ;;
         run_migrations)
             run_migrations "$@"
             ;;
         enable_feature_flags)
             enable_feature_flags "$@"
-            ;;
-        compile_translations)
-            compile_translations "$@"
-            ;;
-        start_asset_services)
-            start_asset_services "$@"
             ;;
         start_rdm_services)
             start_rdm_services "$@"

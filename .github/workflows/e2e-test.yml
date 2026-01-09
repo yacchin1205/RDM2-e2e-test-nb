@@ -73,8 +73,149 @@ on:
           - 'false'
 
 jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      osf_image: ${{ steps.build.outputs.image }}
+      custom_repository: ${{ steps.rdm_config.outputs.custom_repository }}
+      custom_branch: ${{ steps.rdm_config.outputs.custom_branch }}
+      merge_required: ${{ steps.rdm_config.outputs.merge_required }}
+    steps:
+    - name: Checkout test repository
+      uses: actions/checkout@v4
+      with:
+        path: e2e-tests
+
+    - name: Determine RDM repository and branch
+      id: rdm_config
+      run: |
+        BASE_REPO="RCOSDP/RDM-osf.io"
+        BASE_BRANCH="develop"
+        CUSTOM_REPO=""
+        CUSTOM_BRANCH=""
+        MERGE_REQUIRED="false"
+        MERGE_FLAG="true"
+        TARGET_REPO="$BASE_REPO"
+        TARGET_BRANCH="$BASE_BRANCH"
+
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          cat > /tmp/pr_body.txt << 'EOF'
+        ${{ github.event.pull_request.body }}
+        EOF
+          RDM_REPO=$(grep -oP '^-\s*RDM_REPOSITORY:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          RDM_BRANCH=$(grep -oP '^-\s*RDM_BRANCH:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          RDM_MERGE=$(grep -oP '^-\s*RDM_MERGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' | tr '[:upper:]' '[:lower:]' || true)
+
+          if [[ -n "$RDM_MERGE" ]]; then
+            case "$RDM_MERGE" in
+              false|no|off) MERGE_FLAG="false" ;;
+              true|yes|on) MERGE_FLAG="true" ;;
+            esac
+          fi
+
+          if [[ -n "$RDM_REPO" || -n "$RDM_BRANCH" ]]; then
+            CUSTOM_REPO="${RDM_REPO:-$BASE_REPO}"
+            CUSTOM_BRANCH="${RDM_BRANCH:-$BASE_BRANCH}"
+          fi
+        else
+          INPUT_REPO="${{ github.event.inputs.rdm_repository || '' }}"
+          INPUT_BRANCH="${{ github.event.inputs.rdm_branch || '' }}"
+          INPUT_MERGE="${{ github.event.inputs.merge_custom_rdm || '' }}"
+
+          if [[ -n "$INPUT_MERGE" ]]; then
+            INPUT_MERGE=$(echo "$INPUT_MERGE" | tr '[:upper:]' '[:lower:]')
+            case "$INPUT_MERGE" in
+              false|no|off) MERGE_FLAG="false" ;;
+              true|yes|on) MERGE_FLAG="true" ;;
+            esac
+          fi
+
+          if [[ -n "$INPUT_REPO" || -n "$INPUT_BRANCH" ]]; then
+            CUSTOM_REPO="${INPUT_REPO:-$BASE_REPO}"
+            CUSTOM_BRANCH="${INPUT_BRANCH:-$BASE_BRANCH}"
+          fi
+        fi
+
+        if [[ -n "$CUSTOM_REPO" || -n "$CUSTOM_BRANCH" ]]; then
+          CUSTOM_REPO="${CUSTOM_REPO:-$BASE_REPO}"
+          CUSTOM_BRANCH="${CUSTOM_BRANCH:-$BASE_BRANCH}"
+
+          if [[ "$MERGE_FLAG" == "true" ]]; then
+            MERGE_REQUIRED="true"
+          else
+            TARGET_REPO="$CUSTOM_REPO"
+            TARGET_BRANCH="$CUSTOM_BRANCH"
+          fi
+        fi
+
+        echo "repository=$TARGET_REPO" >> $GITHUB_OUTPUT
+        echo "branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
+        echo "custom_repository=$CUSTOM_REPO" >> $GITHUB_OUTPUT
+        echo "custom_branch=$CUSTOM_BRANCH" >> $GITHUB_OUTPUT
+        echo "merge_required=$MERGE_REQUIRED" >> $GITHUB_OUTPUT
+
+    - name: Checkout RDM-osf.io
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ steps.rdm_config.outputs.repository }}
+        ref: ${{ steps.rdm_config.outputs.branch }}
+        path: RDM-osf.io
+        fetch-depth: 0
+
+    - name: Merge custom RDM changes into develop
+      if: steps.rdm_config.outputs.merge_required == 'true'
+      working-directory: RDM-osf.io
+      run: |
+        CUSTOM_REPO="${{ steps.rdm_config.outputs.custom_repository }}"
+        CUSTOM_BRANCH="${{ steps.rdm_config.outputs.custom_branch }}"
+        BASE_REPO="${{ steps.rdm_config.outputs.repository }}"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "RDM-e2e-test-nb@example.com"
+
+        if [[ "$CUSTOM_REPO" == "$BASE_REPO" ]]; then
+          git fetch origin "$CUSTOM_BRANCH"
+          git merge --no-ff --no-commit "origin/$CUSTOM_BRANCH"
+        else
+          git remote add custom "https://github.com/${CUSTOM_REPO}.git"
+          git fetch custom "$CUSTOM_BRANCH"
+          git merge --no-ff --no-commit FETCH_HEAD
+        fi
+
+        if git status --short | grep '^UU' >/dev/null; then
+          echo "Merge conflicts detected; aborting."
+          exit 1
+        fi
+
+        if ! git diff --quiet --cached; then
+          git commit --no-verify -m "Temporary merge of ${CUSTOM_REPO}@${CUSTOM_BRANCH} for E2E tests"
+        fi
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build RDM-osf.io image
+      id: build
+      working-directory: RDM-osf.io
+      run: |
+        docker build -t rdm-osf-e2e:${{ github.sha }} -f ./Dockerfile .
+        echo "image=rdm-osf-e2e:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+    - name: Save Docker image
+      run: |
+        docker save rdm-osf-e2e:${{ github.sha }} -o /tmp/rdm-osf-image.tar
+
+    - name: Upload Docker image artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: rdm-osf-image
+        path: /tmp/rdm-osf-image.tar
+        retention-days: 1
+
   e2e-test:
     runs-on: ubuntu-latest
+    needs: build-image
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -209,98 +350,17 @@ jobs:
       with:
         path: e2e-tests
 
-    - name: Determine RDM repository and branch
-      id: rdm_config
-      run: |
-        BASE_REPO="RCOSDP/RDM-osf.io"
-        BASE_BRANCH="develop"
-        CUSTOM_REPO=""
-        CUSTOM_BRANCH=""
-        MERGE_REQUIRED="false"
-        MERGE_FLAG="true"
-        TARGET_REPO="$BASE_REPO"
-        TARGET_BRANCH="$BASE_BRANCH"
-
-        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-          # Extract from PR body (using file to avoid shell injection)
-          cat > /tmp/pr_body.txt << 'EOF'
-        ${{ github.event.pull_request.body }}
-        EOF
-          RDM_REPO=$(grep -oP '^-\s*RDM_REPOSITORY:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
-          RDM_BRANCH=$(grep -oP '^-\s*RDM_BRANCH:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
-          RDM_MERGE=$(grep -oP '^-\s*RDM_MERGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' | tr '[:upper:]' '[:lower:]' || true)
-
-          if [[ -n "$RDM_MERGE" ]]; then
-            case "$RDM_MERGE" in
-              false|no|off)
-                MERGE_FLAG="false"
-                ;;
-              true|yes|on)
-                MERGE_FLAG="true"
-                ;;
-            esac
-          fi
-
-          if [[ -n "$RDM_REPO" || -n "$RDM_BRANCH" ]]; then
-            CUSTOM_REPO="${RDM_REPO:-$BASE_REPO}"
-            CUSTOM_BRANCH="${RDM_BRANCH:-$BASE_BRANCH}"
-          fi
-        else
-          # Use workflow inputs or defaults
-          INPUT_REPO="${{ github.event.inputs.rdm_repository || '' }}"
-          INPUT_BRANCH="${{ github.event.inputs.rdm_branch || '' }}"
-          INPUT_MERGE="${{ github.event.inputs.merge_custom_rdm || '' }}"
-
-          if [[ -n "$INPUT_MERGE" ]]; then
-            INPUT_MERGE=$(echo "$INPUT_MERGE" | tr '[:upper:]' '[:lower:]')
-            case "$INPUT_MERGE" in
-              false|no|off)
-                MERGE_FLAG="false"
-                ;;
-              true|yes|on)
-                MERGE_FLAG="true"
-                ;;
-            esac
-          fi
-
-          if [[ -n "$INPUT_REPO" || -n "$INPUT_BRANCH" ]]; then
-            CUSTOM_REPO="${INPUT_REPO:-$BASE_REPO}"
-            CUSTOM_BRANCH="${INPUT_BRANCH:-$BASE_BRANCH}"
-          fi
-        fi
-
-        if [[ -n "$CUSTOM_REPO" || -n "$CUSTOM_BRANCH" ]]; then
-          CUSTOM_REPO="${CUSTOM_REPO:-$BASE_REPO}"
-          CUSTOM_BRANCH="${CUSTOM_BRANCH:-$BASE_BRANCH}"
-
-          if [[ "$MERGE_FLAG" == "true" ]]; then
-            MERGE_REQUIRED="true"
-          else
-            TARGET_REPO="$CUSTOM_REPO"
-            TARGET_BRANCH="$CUSTOM_BRANCH"
-          fi
-        fi
-
-        echo "Base RDM repository: $BASE_REPO @ $BASE_BRANCH"
-        if [[ "$MERGE_REQUIRED" == "true" ]]; then
-          echo "Merging custom RDM source: $CUSTOM_REPO @ $CUSTOM_BRANCH"
-        elif [[ -n "$CUSTOM_REPO" || -n "$CUSTOM_BRANCH" ]]; then
-          echo "Using custom RDM source without merge: $CUSTOM_REPO @ $CUSTOM_BRANCH"
-        fi
-        echo "Checkout target: $TARGET_REPO @ $TARGET_BRANCH"
-
-        echo "repository=$TARGET_REPO" >> $GITHUB_OUTPUT
-        echo "branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
-        echo "custom_repository=$CUSTOM_REPO" >> $GITHUB_OUTPUT
-        echo "custom_branch=$CUSTOM_BRANCH" >> $GITHUB_OUTPUT
-        echo "merge_required=$MERGE_REQUIRED" >> $GITHUB_OUTPUT
-        echo "merge_flag=$MERGE_FLAG" >> $GITHUB_OUTPUT
+    - name: Download RDM-osf.io image artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: rdm-osf-image
+        path: /tmp
 
     - name: Checkout RDM-osf.io
       uses: actions/checkout@v4
       with:
-        repository: ${{ steps.rdm_config.outputs.repository }}
-        ref: ${{ steps.rdm_config.outputs.branch }}
+        repository: RCOSDP/RDM-osf.io
+        ref: develop
         path: RDM-osf.io
         fetch-depth: 0
 
@@ -331,62 +391,19 @@ jobs:
       run: |
         .github/scripts/setup_flowable.sh prepare ../RDM-flowable-gateway ../RDM-osf.io
 
-    - name: Merge custom RDM changes into develop
-      if: steps.rdm_config.outputs.merge_required == 'true'
-      working-directory: RDM-osf.io
-      run: |
-        CUSTOM_REPO="${{ steps.rdm_config.outputs.custom_repository }}"
-        CUSTOM_BRANCH="${{ steps.rdm_config.outputs.custom_branch }}"
-        BASE_REPO="${{ steps.rdm_config.outputs.repository }}"
-
-        # Ensure committer identity is available before running merge commands
-        git config user.name "github-actions[bot]"
-        git config user.email "RDM-e2e-test-nb@example.com"
-
-        if [[ "$CUSTOM_REPO" == "$BASE_REPO" ]]; then
-          echo "Fetching branch $CUSTOM_BRANCH from origin"
-          git fetch origin "$CUSTOM_BRANCH"
-          git merge --no-ff --no-commit "origin/$CUSTOM_BRANCH"
-        else
-          echo "Fetching branch $CUSTOM_BRANCH from $CUSTOM_REPO"
-          if git remote get-url custom >/dev/null 2>&1; then
-            git remote set-url custom "https://github.com/${CUSTOM_REPO}.git"
-          else
-            git remote add custom "https://github.com/${CUSTOM_REPO}.git"
-          fi
-          git fetch custom "$CUSTOM_BRANCH"
-          git merge --no-ff --no-commit FETCH_HEAD
-        fi
-
-        if git status --short | grep '^UU' >/dev/null; then
-          echo "Merge conflicts detected; aborting."
-          exit 1
-        fi
-
-        if git diff --quiet --cached; then
-          echo "No custom changes to merge; repository already up to date."
-        else
-          git commit --no-verify -m "Temporary merge of ${CUSTOM_REPO}@${CUSTOM_BRANCH} for E2E tests"
-        fi
-
-    - name: Create local reference for merged target
-      working-directory: RDM-osf.io
-      run: |
-        git branch --force e2e-target HEAD
-        
     - name: Setup migration source (migration mode)
       if: matrix.test-group.migration_from != null
       working-directory: RDM-osf.io
       run: |
         # Fetch origin to ensure we have the target version
         git fetch origin
-        
-        # Add migration source repository as remote if different
-        if [ "${{ matrix.test-group.migration_from.repository }}" != "${{ steps.rdm_config.outputs.repository }}" ]; then
+
+        # Add migration source repository as remote if different from RCOSDP/RDM-osf.io
+        if [ "${{ matrix.test-group.migration_from.repository }}" != "RCOSDP/RDM-osf.io" ]; then
           git remote add migration-source https://github.com/${{ matrix.test-group.migration_from.repository }}.git
           git fetch migration-source
         fi
-        
+
         # Checkout the migration source commit
         git checkout ${{ matrix.test-group.migration_from.commit }}
 
@@ -412,6 +429,14 @@ jobs:
         docker info | grep "Docker Root Dir"
         df -h
 
+    - name: Load RDM-osf.io image
+      run: |
+        docker load -i /tmp/rdm-osf-image.tar
+        # Set OSF_IMAGE for non-migration mode; migration mode will set it after switching to target
+        if [ "${{ matrix.test-group.migration_from == null }}" = "true" ]; then
+          echo "OSF_IMAGE=${{ needs.build-image.outputs.osf_image }}" >> $GITHUB_ENV
+        fi
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -424,7 +449,7 @@ jobs:
 
     - name: Install Docker Compose
       run: |
-        sudo curl -L "https://github.com/docker/compose/releases/download/v2.23.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        sudo curl -L "https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
         sudo chmod +x /usr/local/bin/docker-compose
         docker-compose --version
 
@@ -450,23 +475,14 @@ jobs:
         export MFR_IMAGE="${{ matrix.test-group.migration_from.mfr_image }}"
         export WB_IMAGE="${{ matrix.test-group.migration_from.wb_image }}"
         create_docker_override
-        
-        # Install requirements
-        install_requirements
-        
+
         # Run migrations
         run_migrations
-        
+
         # Enable feature flags
         export FEATURE_FLAGS="ember_edit_draft_registration_page"
         enable_feature_flags
-        
-        # Compile translations
-        compile_translations
-        
-        # Start asset services after translations
-        start_asset_services
-        
+
         # Start services for migration source environment
         start_rdm_services
         
@@ -568,11 +584,41 @@ jobs:
       working-directory: RDM-osf.io
       run: |
         echo "Switching to migration target version..."
-        
-        # Reset to the merged target state captured earlier
-        git checkout -f e2e-target
-        
-        echo "Switched to target version: e2e-target"
+
+        # First, checkout develop branch
+        git fetch origin
+        git checkout -f develop
+        git reset --hard origin/develop
+
+        # Replicate the merge from build-image job if needed
+        MERGE_REQUIRED="${{ needs.build-image.outputs.merge_required }}"
+        if [[ "$MERGE_REQUIRED" == "true" ]]; then
+          CUSTOM_REPO="${{ needs.build-image.outputs.custom_repository }}"
+          CUSTOM_BRANCH="${{ needs.build-image.outputs.custom_branch }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "RDM-e2e-test-nb@example.com"
+
+          if [[ "$CUSTOM_REPO" == "RCOSDP/RDM-osf.io" ]]; then
+            git fetch origin "$CUSTOM_BRANCH"
+            git merge --no-ff --no-commit "origin/$CUSTOM_BRANCH"
+          else
+            git remote add custom "https://github.com/${CUSTOM_REPO}.git" 2>/dev/null || git remote set-url custom "https://github.com/${CUSTOM_REPO}.git"
+            git fetch custom "$CUSTOM_BRANCH"
+            git merge --no-ff --no-commit FETCH_HEAD
+          fi
+
+          if ! git diff --quiet --cached; then
+            git commit --no-verify -m "Temporary merge of ${CUSTOM_REPO}@${CUSTOM_BRANCH} for E2E tests"
+          fi
+
+          echo "Merged custom branch: $CUSTOM_REPO @ $CUSTOM_BRANCH"
+        fi
+
+        # Set OSF_IMAGE to the built image for target environment
+        echo "OSF_IMAGE=${{ needs.build-image.outputs.osf_image }}" >> $GITHUB_ENV
+
+        echo "Switched to target version"
 
     - name: Create required configuration files for RDM
       working-directory: RDM-osf.io
@@ -587,6 +633,12 @@ jobs:
       working-directory: RDM-osf.io
       run: |
         # Check for image override in PR body or use workflow inputs
+        OSF_OVERRIDE=""
+        EMBER_OVERRIDE=""
+        CAS_OVERRIDE=""
+        MFR_OVERRIDE=""
+        WB_OVERRIDE=""
+
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
           # Extract image overrides from PR description if present
           # Format: - OSF_IMAGE: yacchin1205/rdm2-osf.io:feature_ror-v2
@@ -612,31 +664,33 @@ jobs:
           echo "TLJH_PLUGIN_OVERRIDE=$TLJH_PLUGIN_OVERRIDE" >> $GITHUB_ENV
           echo "TLJH_REPO2DOCKER_IMAGE_OVERRIDE=$TLJH_REPO2DOCKER_IMAGE_OVERRIDE" >> $GITHUB_ENV
           echo "TLJH_RDMFS_IMAGE_OVERRIDE=$TLJH_RDMFS_IMAGE_OVERRIDE" >> $GITHUB_ENV
-          
-          # Use overrides if found, otherwise defaults
-          export OSF_IMAGE="${OSF_OVERRIDE:-niicloudoperation/rdm-osf.io:latest}"
-          export EMBER_IMAGE="${EMBER_OVERRIDE:-niicloudoperation/rdm-ember-osf-web:latest}"
-          export CAS_IMAGE="${CAS_OVERRIDE:-niicloudoperation/rdm-cas-overlay:latest}"
-          export MFR_IMAGE="${MFR_OVERRIDE:-niicloudoperation/rdm-modular-file-renderer:latest}"
-          export WB_IMAGE="${WB_OVERRIDE:-niicloudoperation/rdm-waterbutler:latest}"
         else
-          # Use workflow dispatch inputs or defaults
-          export OSF_IMAGE="${{ github.event.inputs.osf_image || 'niicloudoperation/rdm-osf.io:latest' }}"
-          export EMBER_IMAGE="${{ github.event.inputs.ember_image || 'niicloudoperation/rdm-ember-osf-web:latest' }}"
-          export CAS_IMAGE="${{ github.event.inputs.cas_image || 'niicloudoperation/rdm-cas-overlay:latest' }}"
-          export MFR_IMAGE="${{ github.event.inputs.mfr_image || 'niicloudoperation/rdm-modular-file-renderer:latest' }}"
-          export WB_IMAGE="${{ github.event.inputs.wb_image || 'niicloudoperation/rdm-waterbutler:latest' }}"
+          # Use workflow dispatch inputs if explicitly specified
+          OSF_OVERRIDE="${{ github.event.inputs.osf_image }}"
+          EMBER_OVERRIDE="${{ github.event.inputs.ember_image }}"
+          CAS_OVERRIDE="${{ github.event.inputs.cas_image }}"
+          MFR_OVERRIDE="${{ github.event.inputs.mfr_image }}"
+          WB_OVERRIDE="${{ github.event.inputs.wb_image }}"
         fi
-        
+
+        # Priority: explicit override > built image (OSF_IMAGE env)
+        # OSF_IMAGE must be set from built artifact in earlier step
+        if [[ -n "$OSF_OVERRIDE" ]]; then
+          export OSF_IMAGE="$OSF_OVERRIDE"
+        elif [[ -z "$OSF_IMAGE" ]]; then
+          echo "ERROR: OSF_IMAGE is not set. This should have been set by 'Load RDM-osf.io image' or 'Switch to migration target version' step."
+          exit 1
+        fi
+        # For other images, use override or default (no built image for these)
+        export EMBER_IMAGE="${EMBER_OVERRIDE:-niicloudoperation/rdm-ember-osf-web:latest}"
+        export CAS_IMAGE="${CAS_OVERRIDE:-niicloudoperation/rdm-cas-overlay:latest}"
+        export MFR_IMAGE="${MFR_OVERRIDE:-niicloudoperation/rdm-modular-file-renderer:latest}"
+        export WB_IMAGE="${WB_OVERRIDE:-niicloudoperation/rdm-waterbutler:latest}"
+
+        echo "Using OSF_IMAGE: $OSF_IMAGE"
+
         source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
         create_docker_override
-
-    - name: Install RDM requirements
-      working-directory: RDM-osf.io
-      run: |
-        source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
-        install_requirements
-      timeout-minutes: 15
 
     - name: Run Django migrations
       working-directory: RDM-osf.io
@@ -651,16 +705,6 @@ jobs:
         source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
         export FEATURE_FLAGS="ember_edit_draft_registration_page"
         enable_feature_flags
-
-    - name: Compile translations
-      working-directory: RDM-osf.io
-      run: |
-        source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
-        export INCLUDE_ADMIN=${{ matrix.test-group.include_admin }}
-        compile_translations
-        
-        # Start asset services immediately after translations
-        start_asset_services
 
     - name: Start all RDM services
       working-directory: RDM-osf.io
