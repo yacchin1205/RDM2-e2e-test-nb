@@ -10,6 +10,7 @@ import yaml
 
 
 CONTAINER_CERT_PATH = "/etc/ssl/certs/weko-ca.crt"
+CERTIFI_CA_PATH = "$(python3 -c 'import certifi; print(certifi.where())')"
 
 # web/worker use requests library which uses certifi
 # wb/wb_worker use aiohttp which uses OpenSSL's set_default_verify_paths()
@@ -17,11 +18,11 @@ CONTAINER_CERT_PATH = "/etc/ssl/certs/weko-ca.crt"
 SERVICE_CONFIG = {
     "web": {
         "command": "invoke server -h 0.0.0.0",
-        "cert_setup": f"cat {CONTAINER_CERT_PATH} >> /usr/lib/python3.6/site-packages/certifi/cacert.pem",
+        "cert_setup": f'cat {CONTAINER_CERT_PATH} >> "{CERTIFI_CA_PATH}"',
     },
     "worker": {
         "command": "invoke celery_worker",
-        "cert_setup": f"cat {CONTAINER_CERT_PATH} >> /usr/lib/python3.6/site-packages/certifi/cacert.pem",
+        "cert_setup": f'cat {CONTAINER_CERT_PATH} >> "{CERTIFI_CA_PATH}"',
     },
     "wb": {
         "command": "invoke server",

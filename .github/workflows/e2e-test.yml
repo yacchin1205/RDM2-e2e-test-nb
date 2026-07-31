@@ -15,6 +15,14 @@ on:
         description: 'RDM-osf.io branch to test against'
         required: false
         default: 'develop'
+      rdm_python_version:
+        description: 'Python version used by the RDM-osf.io image'
+        required: false
+        default: '3.6'
+        type: choice
+        options:
+          - '3.6'
+          - '3.12'
       merge_custom_rdm:
         description: 'Merge custom RDM branch into base branch before testing'
         required: false
@@ -170,6 +178,7 @@ jobs:
             migration_from:
               repository: "RCOSDP/RDM-osf.io"
               commit: "4c007f2"
+              python_version: "3.6"
               osf_image: "niicloudoperation/rdm-osf.io:20250906"
               ember_image: "niicloudoperation/rdm-ember-osf-web:20250906"
               cas_image: "niicloudoperation/rdm-cas-overlay:20250906"
@@ -201,6 +210,7 @@ jobs:
             migration_from:
               repository: "RCOSDP/RDM-osf.io"
               commit: "4c007f2"
+              python_version: "3.6"
               osf_image: "niicloudoperation/rdm-osf.io:20250906"
               ember_image: "niicloudoperation/rdm-ember-osf-web:20250906"
               cas_image: "niicloudoperation/rdm-cas-overlay:20250906"
@@ -635,7 +645,7 @@ jobs:
         export CAS_IMAGE="${{ matrix.test-group.migration_from.cas_image }}"
         export MFR_IMAGE="${{ matrix.test-group.migration_from.mfr_image }}"
         export WB_IMAGE="${{ matrix.test-group.migration_from.wb_image }}"
-        create_docker_override
+        create_docker_override "${{ matrix.test-group.migration_from.python_version }}"
         
         # Install requirements
         install_requirements
@@ -923,6 +933,7 @@ jobs:
         ${{ github.event.pull_request.body }}
         EOF
           OSF_OVERRIDE=$(grep -oP '^-\s*OSF_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
+          RDM_PYTHON_VERSION_OVERRIDE=$(grep -oP '^-\s*RDM_PYTHON_VERSION:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
           EMBER_OVERRIDE=$(grep -oP '^-\s*EMBER_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
           CAS_OVERRIDE=$(grep -oP '^-\s*CAS_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
           MFR_OVERRIDE=$(grep -oP '^-\s*MFR_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
@@ -949,6 +960,7 @@ jobs:
           else
             export OSF_IMAGE="${OSF_OVERRIDE:-niicloudoperation/rdm-osf.io:latest}"
           fi
+          export RDM_PYTHON_VERSION="${RDM_PYTHON_VERSION_OVERRIDE:-3.6}"
           export EMBER_IMAGE="${EMBER_OVERRIDE:-niicloudoperation/rdm-ember-osf-web:latest}"
           export CAS_IMAGE="${CAS_OVERRIDE:-niicloudoperation/rdm-cas-overlay:latest}"
           export MFR_IMAGE="${MFR_OVERRIDE:-niicloudoperation/rdm-modular-file-renderer:latest}"
@@ -965,6 +977,7 @@ jobs:
           else
             export OSF_IMAGE="${{ github.event.inputs.osf_image || 'niicloudoperation/rdm-osf.io:latest' }}"
           fi
+          export RDM_PYTHON_VERSION="${{ github.event.inputs.rdm_python_version || '3.6' }}"
           export EMBER_IMAGE="${{ github.event.inputs.ember_image || 'niicloudoperation/rdm-ember-osf-web:latest' }}"
           export CAS_IMAGE="${{ github.event.inputs.cas_image || 'niicloudoperation/rdm-cas-overlay:latest' }}"
           export MFR_IMAGE="${{ github.event.inputs.mfr_image || 'niicloudoperation/rdm-modular-file-renderer:latest' }}"
@@ -976,7 +989,7 @@ jobs:
         fi
 
         source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
-        create_docker_override
+        create_docker_override "$RDM_PYTHON_VERSION"
 
     - name: Install RDM requirements
       working-directory: RDM-osf.io

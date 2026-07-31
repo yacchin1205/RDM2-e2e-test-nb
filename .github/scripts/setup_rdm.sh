@@ -225,6 +225,29 @@ BINDERHUB_EOF
 
 # Function to create docker-compose override with NII Cloud Operation images
 create_docker_override() {
+    local python_version="${1:?Python version is required}"
+    local requirements_command
+
+    case "$python_version" in
+        3.6)
+            requirements_command='invoke requirements --all &&
+        (python3 -m compileall /usr/lib/python3.6 || true) &&
+        rm -Rf /python3.6/* &&
+        cp -Rf -p /usr/lib/python3.6 /'
+            ;;
+        3.12)
+            requirements_command='python -m venv /tmp/venv &&
+        /tmp/venv/bin/pip install poetry==1.8.3 &&
+        /tmp/venv/bin/poetry install --no-root --without release --compile --sync &&
+        rm -Rf /python3.12/* &&
+        cp -Rf -p /usr/local/lib/python3.12 /'
+            ;;
+        *)
+            echo "Unsupported Python version: $python_version" >&2
+            return 1
+            ;;
+    esac
+
     # Use environment variables for images
     local osf_image="${OSF_IMAGE:-niicloudoperation/rdm-osf.io:latest}"
     local ember_image="${EMBER_IMAGE:-niicloudoperation/rdm-ember-osf-web:latest}"
@@ -270,10 +293,7 @@ services:
       - /bin/bash
       - -c
       - apk add --no-cache --virtual .build-deps build-base linux-headers python3-dev musl-dev libxml2-dev libxslt-dev postgresql-dev libffi-dev libpng-dev freetype-dev jpeg-dev &&
-        invoke requirements --all &&
-        (python3 -m compileall /usr/lib/python3.6 || true) &&
-        rm -Rf /python3.6/* &&
-        cp -Rf -p /usr/lib/python3.6 /
+        ${requirements_command}
   web:
     image: ${osf_image}
     environment:
