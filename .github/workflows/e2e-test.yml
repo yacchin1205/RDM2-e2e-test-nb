@@ -651,7 +651,7 @@ jobs:
         install_requirements
         
         # Run migrations
-        run_migrations
+        run_migrations "${{ matrix.test-group.migration_from.python_version }}"
         
         # Enable feature flags
         export FEATURE_FLAGS="ember_edit_draft_registration_page"
@@ -988,6 +988,7 @@ jobs:
           fi
         fi
 
+        echo "RDM_PYTHON_VERSION=$RDM_PYTHON_VERSION" >> "$GITHUB_ENV"
         source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
         create_docker_override "$RDM_PYTHON_VERSION"
 
@@ -1002,7 +1003,7 @@ jobs:
       working-directory: RDM-osf.io
       run: |
         source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
-        run_migrations
+        run_migrations "$RDM_PYTHON_VERSION"
         
     - name: Enable feature flags
       if: matrix.test-group.migration_from == null

@@ -373,6 +373,8 @@ EOL
 
 # Function to run Django migrations
 run_migrations() {
+    local python_version="${1:?Python version is required}"
+
     echo "Running Django migrations..."
     echo "Ensuring Elasticsearch is ready..."
     docker-compose up -d elasticsearch
@@ -385,7 +387,18 @@ run_migrations() {
     TIMEOUT=240 wait_for_service
     docker-compose run --rm web python3 manage.py migrate
     echo "Running search migrations..."
-    docker-compose run --rm web invoke migrate_search
+    case "$python_version" in
+        3.6)
+            docker-compose run --rm web invoke migrate_search
+            ;;
+        3.12)
+            docker-compose run --rm web python3 -m invoke migrate-search
+            ;;
+        *)
+            echo "Unsupported Python version: $python_version" >&2
+            return 1
+            ;;
+    esac
     echo "Migrations completed"
 }
 
