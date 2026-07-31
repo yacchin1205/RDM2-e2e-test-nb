@@ -932,12 +932,12 @@ jobs:
           cat > /tmp/pr_body.txt << 'EOF'
         ${{ github.event.pull_request.body }}
         EOF
-          OSF_OVERRIDE=$(grep -oP '^-\s*OSF_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
-          RDM_PYTHON_VERSION_OVERRIDE=$(grep -oP '^-\s*RDM_PYTHON_VERSION:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
-          EMBER_OVERRIDE=$(grep -oP '^-\s*EMBER_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
-          CAS_OVERRIDE=$(grep -oP '^-\s*CAS_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
-          MFR_OVERRIDE=$(grep -oP '^-\s*MFR_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
-          WB_OVERRIDE=$(grep -oP '^-\s*WB_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
+          OSF_OVERRIDE=$(grep -oP '^-\s*OSF_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          RDM_PYTHON_VERSION_OVERRIDE=$(grep -oP '^-\s*RDM_PYTHON_VERSION:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          EMBER_OVERRIDE=$(grep -oP '^-\s*EMBER_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          CAS_OVERRIDE=$(grep -oP '^-\s*CAS_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          MFR_OVERRIDE=$(grep -oP '^-\s*MFR_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          WB_OVERRIDE=$(grep -oP '^-\s*WB_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
           EXCLUDE_NOTEBOOKS_OVERRIDE=$(grep -oP '^-\s*EXCLUDE_NOTEBOOKS:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d '\r' || true)
 
           # Extract TLJH parameters from PR body
