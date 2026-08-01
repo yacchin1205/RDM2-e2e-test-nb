@@ -371,7 +371,8 @@ EOL
         script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         python3 "${script_dir}/weko_setup_cert.py" \
             "${PWD}/docker-compose.override.yml" \
-            "${script_dir}/../../../weko/nginx/keys/server.crt"
+            "${script_dir}/../../../weko/nginx/keys/server.crt" \
+            "${python_version}"
     fi
 }
 
