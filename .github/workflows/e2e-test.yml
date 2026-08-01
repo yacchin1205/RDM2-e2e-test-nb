@@ -398,6 +398,9 @@ jobs:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_REGION: us-east-1
       MINIO_SERVICE_NAME: MinIO (CI)
+      RDM_WEB_URL: http://192.168.168.167:5000/
+      RDM_API_URL: http://192.168.168.167:8000/v2/
+      RDM_ADMIN_URL: http://192.168.168.167:8001/
 
     steps:
     - name: Checkout test repository
