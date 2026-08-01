@@ -406,6 +406,175 @@ run_migrations() {
     echo "Migrations completed"
 }
 
+# Return the PostgreSQL major version that defines physical data compatibility.
+# PostgreSQL 9.x uses the first two components (for example, 9.6), while
+# PostgreSQL 10 and later use the first component (for example, 15).
+postgres_major_version() {
+    local version="${1:?PostgreSQL version is required}"
+    local first_component
+
+    first_component="${version%%.*}"
+    if [ "$first_component" -lt 10 ]; then
+        echo "$version" | cut -d. -f1,2
+    else
+        echo "$first_component"
+    fi
+}
+
+# Read the postgres service image from the target revision without switching
+# the working tree away from the running migration-source environment.
+postgres_image_at_revision() {
+    local revision="${1:?Git revision is required}"
+
+    git show "${revision}:docker-compose.yml" | awk '
+        /^  postgres:$/ {
+            in_postgres_service = 1
+            next
+        }
+        in_postgres_service && /^  [[:alnum:]_-]+:$/ {
+            exit
+        }
+        in_postgres_service && /^[[:space:]]+image:/ {
+            sub(/^[[:space:]]*image:[[:space:]]*/, "")
+            gsub(/["'\'' ]/, "")
+            print
+            exit
+        }
+    '
+}
+
+# Compare the running source PostgreSQL with the target image while the source
+# database is still available.  A logical dump is created only when their
+# major versions differ.
+prepare_postgres_version_migration() {
+    local target_revision="${1:?Target Git revision is required}"
+    local state_dir="${RUNNER_TEMP:-/tmp}/rdm-postgres-migration"
+    local state_file="${state_dir}/state"
+    local dump_file="${state_dir}/osf.dump"
+    local source_container
+    local source_version
+    local source_major
+    local source_volume
+    local target_image
+    local target_version_output
+    local target_version
+    local target_major
+
+    mkdir -p "$state_dir"
+
+    source_container="$(docker-compose ps -q postgres)"
+    if [ -z "$source_container" ]; then
+        echo "PostgreSQL source container is not running" >&2
+        return 1
+    fi
+
+    source_version="$(docker-compose exec -T postgres \
+        psql -U postgres -d osf -Atc 'SHOW server_version')"
+    source_major="$(postgres_major_version "$source_version")"
+    source_volume="$(docker inspect \
+        --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}' \
+        "$source_container")"
+    if [ -z "$source_volume" ]; then
+        echo "Could not identify the PostgreSQL data volume" >&2
+        return 1
+    fi
+
+    target_image="$(postgres_image_at_revision "$target_revision")"
+    if [ -z "$target_image" ]; then
+        echo "Could not identify the PostgreSQL image at ${target_revision}" >&2
+        return 1
+    fi
+    target_version_output="$(docker run --rm "$target_image" postgres --version)"
+    target_version="$(echo "$target_version_output" | sed -E 's/.* ([0-9]+(\.[0-9]+)+).*/\1/')"
+    target_major="$(postgres_major_version "$target_version")"
+
+    echo "Migration source PostgreSQL: ${source_version} (major ${source_major})"
+    echo "Migration target PostgreSQL: ${target_version} (major ${target_major}, image ${target_image})"
+
+    if [ "$source_major" = "$target_major" ]; then
+        printf 'POSTGRES_LOGICAL_MIGRATION_REQUIRED=false\n' > "$state_file"
+        echo "PostgreSQL major versions match; preserving the existing data volume"
+        return 0
+    fi
+
+    echo "PostgreSQL major versions differ; creating a logical dump"
+    docker-compose exec -T postgres pg_dump \
+        -U postgres \
+        --format=custom \
+        --no-owner \
+        --no-privileges \
+        osf > "$dump_file"
+
+    {
+        printf 'POSTGRES_LOGICAL_MIGRATION_REQUIRED=true\n'
+        printf 'POSTGRES_SOURCE_MAJOR=%q\n' "$source_major"
+        printf 'POSTGRES_TARGET_MAJOR=%q\n' "$target_major"
+        printf 'POSTGRES_SOURCE_VOLUME=%q\n' "$source_volume"
+        printf 'POSTGRES_DUMP_FILE=%q\n' "$dump_file"
+    } > "$state_file"
+    echo "PostgreSQL logical dump created at ${dump_file}"
+}
+
+# Restore a dump prepared by prepare_postgres_version_migration into a fresh
+# target PostgreSQL data volume.  Other migration-test volumes are untouched.
+restore_postgres_after_version_change() {
+    local state_dir="${RUNNER_TEMP:-/tmp}/rdm-postgres-migration"
+    local state_file="${state_dir}/state"
+    local elapsed=0
+    local timeout=120
+
+    if [ ! -f "$state_file" ]; then
+        echo "PostgreSQL migration state is missing: ${state_file}" >&2
+        return 1
+    fi
+
+    # shellcheck disable=SC1090
+    source "$state_file"
+    if [ "$POSTGRES_LOGICAL_MIGRATION_REQUIRED" != "true" ]; then
+        echo "PostgreSQL logical migration is not required"
+        return 0
+    fi
+    if [ ! -s "$POSTGRES_DUMP_FILE" ]; then
+        echo "PostgreSQL dump is missing or empty: ${POSTGRES_DUMP_FILE}" >&2
+        return 1
+    fi
+
+    echo "Replacing PostgreSQL ${POSTGRES_SOURCE_MAJOR} data volume for PostgreSQL ${POSTGRES_TARGET_MAJOR}"
+    docker volume rm "$POSTGRES_SOURCE_VOLUME"
+    docker-compose up -d postgres
+
+    # pg_isready also succeeds against the temporary server used by the
+    # official image during initialization.  Wait until PID 1 is the final
+    # postgres process and the configured database accepts a real query.
+    until docker-compose exec -T postgres sh -c \
+            '[ "$(cat /proc/1/comm)" = "postgres" ]' \
+            && docker-compose exec -T postgres \
+                psql -U postgres -d osf -Atc 'SELECT 1' >/dev/null; do
+        if [ "$elapsed" -ge "$timeout" ]; then
+            echo "PostgreSQL did not become ready within ${timeout} seconds" >&2
+            docker-compose logs postgres >&2
+            return 1
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+
+    # The official image creates POSTGRES_DB during initialization.  Recreate
+    # it so the full logical dump, including the public schema, is restored
+    # into an empty database.
+    docker-compose exec -T postgres dropdb -U postgres --if-exists osf
+    docker-compose exec -T postgres createdb -U postgres osf
+    docker-compose exec -T postgres \
+        psql -U postgres -d osf -v ON_ERROR_STOP=1 -c 'DROP SCHEMA public'
+    docker-compose exec -T postgres pg_restore \
+        -U postgres \
+        -d osf \
+        --no-owner \
+        --no-privileges \
+        --exit-on-error < "$POSTGRES_DUMP_FILE"
+    echo "PostgreSQL logical restore completed"
+}
+
 # Function to enable feature flags
 enable_feature_flags() {
     local flags="${FEATURE_FLAGS:-}"  # Use environment variable
