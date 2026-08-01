@@ -227,6 +227,7 @@ BINDERHUB_EOF
 create_docker_override() {
     local python_version="${1:?Python version is required}"
     local requirements_command
+    local api_command=''
 
     case "$python_version" in
         3.6)
@@ -241,6 +242,8 @@ create_docker_override() {
         /tmp/venv/bin/poetry install --no-root --without release --compile --sync &&
         rm -Rf /python3.12/* &&
         cp -Rf -p /usr/local/lib/python3.12 /'
+            api_command='    # Use Django 4.2 threaded runserver for concurrent Ember API requests in E2E tests.
+    command: ["python3", "manage.py", "runserver", "0.0.0.0:8000"]'
             ;;
         *)
             echo "Unsupported Python version: $python_version" >&2
@@ -283,6 +286,7 @@ services:
     image: ${osf_image}
   api:
     image: ${osf_image}
+${api_command}
     environment:
       KAKEN_ELASTIC_URI: http://kaken_elasticsearch:9200
   assets:
