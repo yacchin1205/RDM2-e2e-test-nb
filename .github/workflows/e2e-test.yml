@@ -1257,6 +1257,12 @@ jobs:
         echo "TLJH_USERNAME=admin" >> $GITHUB_ENV
         echo "TLJH_PASSWORD=change-your-password" >> $GITHUB_ENV
 
+    - name: Start TLJH build diagnostics
+      if: env.JUPYTERHUB_ENABLED == 'true'
+      working-directory: e2e-tests
+      run: |
+        .github/scripts/setup_tljh.sh start-logs tljh-logs
+
     - name: Run post-migration tests
       if: matrix.test-group.migration_from.post_migration_notebook != null
       working-directory: e2e-tests/migrations
@@ -1567,15 +1573,16 @@ jobs:
 
     - name: Collect TLJH logs
       if: always() && env.JUPYTERHUB_ENABLED == 'true'
+      working-directory: e2e-tests
       run: |
-        sudo journalctl -u jupyterhub > e2e-tests/jupyterhub-logs.txt 2>&1 || true
+        .github/scripts/setup_tljh.sh collect-logs tljh-logs
 
     - name: Upload TLJH logs
       if: always() && env.JUPYTERHUB_ENABLED == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: tljh-logs-${{ matrix.test-group.name }}
-        path: e2e-tests/jupyterhub-logs.txt
+        path: e2e-tests/tljh-logs/
         retention-days: 7
 
     - name: Collect Flowable logs
