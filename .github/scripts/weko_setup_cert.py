@@ -10,18 +10,28 @@ import yaml
 
 
 CONTAINER_CERT_PATH = "/etc/ssl/certs/weko-ca.crt"
+CERTIFI_CA_PATH = "$(python3 -c 'import certifi; print(certifi.where())')"
 
 # web/worker use requests library which uses certifi
 # wb/wb_worker use aiohttp which uses OpenSSL's set_default_verify_paths()
 # For aiohttp, we need to add cert to /etc/ssl/certs/ and run c_rehash
+OSF_SERVICE_COMMANDS = {
+    "3.6": {
+        "web": "invoke server -h 0.0.0.0",
+        "worker": "invoke celery_worker",
+    },
+    "3.12": {
+        "web": "python3 -m invoke server -h 0.0.0.0",
+        "worker": "python3 -m invoke celery-worker",
+    },
+}
+
 SERVICE_CONFIG = {
     "web": {
-        "command": "invoke server -h 0.0.0.0",
-        "cert_setup": f"cat {CONTAINER_CERT_PATH} >> /usr/lib/python3.6/site-packages/certifi/cacert.pem",
+        "cert_setup": f'cat {CONTAINER_CERT_PATH} >> "{CERTIFI_CA_PATH}"',
     },
     "worker": {
-        "command": "invoke celery_worker",
-        "cert_setup": f"cat {CONTAINER_CERT_PATH} >> /usr/lib/python3.6/site-packages/certifi/cacert.pem",
+        "cert_setup": f'cat {CONTAINER_CERT_PATH} >> "{CERTIFI_CA_PATH}"',
     },
     "wb": {
         "command": "invoke server",
@@ -34,7 +44,7 @@ SERVICE_CONFIG = {
 }
 
 
-def add_weko_cert_config(data: dict, cert_path: Path) -> None:
+def add_weko_cert_config(data: dict, cert_path: Path, python_version: str) -> None:
     """Add volume mount and command to configure WEKO cert for SSL verification."""
     mount = f"{cert_path}:{CONTAINER_CERT_PATH}:ro"
 
@@ -45,7 +55,10 @@ def add_weko_cert_config(data: dict, cert_path: Path) -> None:
         volumes.append(mount)
 
         cert_setup = config["cert_setup"]
-        orig_command = config["command"]
+        if service_name in OSF_SERVICE_COMMANDS[python_version]:
+            orig_command = OSF_SERVICE_COMMANDS[python_version][service_name]
+        else:
+            orig_command = config["command"]
         service["command"] = [
             "/bin/sh",
             "-c",
@@ -67,6 +80,11 @@ def main() -> None:
         type=Path,
         help="Path to WEKO certificate file",
     )
+    parser.add_argument(
+        "python_version",
+        choices=OSF_SERVICE_COMMANDS,
+        help="Python version used by the RDM OSF image",
+    )
     args = parser.parse_args()
 
     cert_abs = args.cert_path.resolve()
@@ -74,7 +92,7 @@ def main() -> None:
     with args.compose_file.open(encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
 
-    add_weko_cert_config(data, cert_abs)
+    add_weko_cert_config(data, cert_abs, args.python_version)
 
     with args.compose_file.open("w", encoding="utf-8") as fh:
         yaml.safe_dump(data, fh, sort_keys=False)

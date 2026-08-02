@@ -370,27 +370,19 @@ async def drop_file(page, element_locator, path):
 
 async def drag_and_drop(page, source, dest):
     await expect(source).to_have_class(re.compile('.*ui-draggable.*'))
+    await source.hover()
 
-    center_coordinates_source = await source.evaluate('''element => {
-        const rect = element.getBoundingClientRect();
-        return {
-            x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2
-        };
-    }''')
+    dest_box = await dest.bounding_box()
+    if dest_box is None:
+        raise RuntimeError('Drag destination is not visible')
 
-    center_coordinates_dest = await dest.evaluate('''element => {
-        const rect = element.getBoundingClientRect();
-        return {
-            x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2
-        };
-    }''')
-
-    await page.mouse.move(center_coordinates_source['x'], center_coordinates_source['y'])
     await page.mouse.down()
     await page.wait_for_timeout(1000)
-    await page.mouse.move(center_coordinates_dest['x'], center_coordinates_dest['y'], steps=30)
+    await page.mouse.move(
+        dest_box['x'] + dest_box['width'] / 2,
+        dest_box['y'] + dest_box['height'] / 2,
+        steps=30,
+    )
     await page.wait_for_timeout(1000)
     await page.mouse.up()
 
@@ -511,6 +503,11 @@ async def fill_text(page, text, transition_timeout=60000):
     await editor_locator.fill(text)
     await expect(editor_locator).to_have_text(text, timeout=transition_timeout)
 
+async def save_wiki(page, transition_timeout=60000):
+    async with page.expect_navigation(wait_until='load', timeout=transition_timeout):
+        await page.locator('//input[@type="submit" and @value="保存"]').click()
+    await expect(page.locator('//span[contains(@class, "title-text")]//b[contains(text(), "プロジェクトのWiki")]')).to_be_visible(timeout=transition_timeout)
+
 async def click_wiki_menu_save(page, menu_list, transition_timeout=60000):
     for menu in menu_list:
         locator_by_id = page.locator(f'#{menu}')
@@ -529,8 +526,7 @@ async def click_wiki_menu_save(page, menu_list, transition_timeout=60000):
 
         raise ValueError(f"Menu item '{menu}' not found in wiki menu bar.")
 
-    await page.locator('//input[@type="submit" and @value="保存"]').click()
-    await expect(page.locator('//span[contains(@class, "title-text")]//b[contains(text(), "プロジェクトのWiki")]')).to_be_visible(timeout=transition_timeout)
+    await save_wiki(page, transition_timeout=transition_timeout)
 
 async def set_text_color(color_input, r, g, b):
     r = max(0, min(255, r))
@@ -580,10 +576,7 @@ async def click_table_menu_save(page, row_index, col_index, table_menu, transiti
 
     await page.locator("#arrowDropDown").click()
     await page.locator(f'.table-dropdown-item:has-text("{table_menu}")').click()
-    await page.locator('//input[@type="submit" and @value="保存"]').click()
-
-    view_locator = page.locator('#mView .ProseMirror[contenteditable="false"]')
-    await expect(page.locator('//span[contains(@class, "title-text")]//b[contains(text(), "プロジェクトのWiki")]')).to_be_visible(timeout=transition_timeout)
+    await save_wiki(page, transition_timeout=transition_timeout)
 
 async def click_and_expect_alert(page, action, expected_message, transition_timeout=60000):
     async with page.expect_event("dialog", timeout=transition_timeout*5) as dialog_info:
