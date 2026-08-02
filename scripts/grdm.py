@@ -370,27 +370,19 @@ async def drop_file(page, element_locator, path):
 
 async def drag_and_drop(page, source, dest):
     await expect(source).to_have_class(re.compile('.*ui-draggable.*'))
+    await source.hover()
 
-    center_coordinates_source = await source.evaluate('''element => {
-        const rect = element.getBoundingClientRect();
-        return {
-            x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2
-        };
-    }''')
+    dest_box = await dest.bounding_box()
+    if dest_box is None:
+        raise RuntimeError('Drag destination is not visible')
 
-    center_coordinates_dest = await dest.evaluate('''element => {
-        const rect = element.getBoundingClientRect();
-        return {
-            x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2
-        };
-    }''')
-
-    await page.mouse.move(center_coordinates_source['x'], center_coordinates_source['y'])
     await page.mouse.down()
     await page.wait_for_timeout(1000)
-    await page.mouse.move(center_coordinates_dest['x'], center_coordinates_dest['y'], steps=30)
+    await page.mouse.move(
+        dest_box['x'] + dest_box['width'] / 2,
+        dest_box['y'] + dest_box['height'] / 2,
+        steps=30,
+    )
     await page.wait_for_timeout(1000)
     await page.mouse.up()
 
