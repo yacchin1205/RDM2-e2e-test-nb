@@ -15,6 +15,14 @@ on:
         description: 'RDM-osf.io branch to test against'
         required: false
         default: 'develop'
+      rdm_python_version:
+        description: 'Python version used by the RDM-osf.io image'
+        required: false
+        default: '3.6'
+        type: choice
+        options:
+          - '3.6'
+          - '3.12'
       merge_custom_rdm:
         description: 'Merge custom RDM branch into base branch before testing'
         required: false
@@ -170,6 +178,7 @@ jobs:
             migration_from:
               repository: "RCOSDP/RDM-osf.io"
               commit: "4c007f2"
+              python_version: "3.6"
               osf_image: "niicloudoperation/rdm-osf.io:20250906"
               ember_image: "niicloudoperation/rdm-ember-osf-web:20250906"
               cas_image: "niicloudoperation/rdm-cas-overlay:20250906"
@@ -201,6 +210,7 @@ jobs:
             migration_from:
               repository: "RCOSDP/RDM-osf.io"
               commit: "4c007f2"
+              python_version: "3.6"
               osf_image: "niicloudoperation/rdm-osf.io:20250906"
               ember_image: "niicloudoperation/rdm-ember-osf-web:20250906"
               cas_image: "niicloudoperation/rdm-cas-overlay:20250906"
@@ -388,6 +398,9 @@ jobs:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_REGION: us-east-1
       MINIO_SERVICE_NAME: MinIO (CI)
+      RDM_WEB_URL: http://192.168.168.167:5000/
+      RDM_API_URL: http://192.168.168.167:8000/v2/
+      RDM_ADMIN_URL: http://192.168.168.167:8001/
 
     steps:
     - name: Checkout test repository
@@ -635,13 +648,13 @@ jobs:
         export CAS_IMAGE="${{ matrix.test-group.migration_from.cas_image }}"
         export MFR_IMAGE="${{ matrix.test-group.migration_from.mfr_image }}"
         export WB_IMAGE="${{ matrix.test-group.migration_from.wb_image }}"
-        create_docker_override
+        create_docker_override "${{ matrix.test-group.migration_from.python_version }}"
         
         # Install requirements
         install_requirements
         
         # Run migrations
-        run_migrations
+        run_migrations "${{ matrix.test-group.migration_from.python_version }}"
         
         # Enable feature flags
         export FEATURE_FLAGS="ember_edit_draft_registration_page"
@@ -740,6 +753,13 @@ jobs:
           -p transition_timeout 60000
         
         echo "Migration-specific initial data notebook executed"
+
+    - name: Prepare PostgreSQL version migration
+      if: matrix.test-group.migration_from != null
+      working-directory: RDM-osf.io
+      run: |
+        source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
+        prepare_postgres_version_migration e2e-target
 
     - name: Stop migration source environment
       if: matrix.test-group.migration_from != null
@@ -922,11 +942,12 @@ jobs:
           cat > /tmp/pr_body.txt << 'EOF'
         ${{ github.event.pull_request.body }}
         EOF
-          OSF_OVERRIDE=$(grep -oP '^-\s*OSF_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
-          EMBER_OVERRIDE=$(grep -oP '^-\s*EMBER_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
-          CAS_OVERRIDE=$(grep -oP '^-\s*CAS_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
-          MFR_OVERRIDE=$(grep -oP '^-\s*MFR_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
-          WB_OVERRIDE=$(grep -oP '^-\s*WB_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' ' || true)
+          OSF_OVERRIDE=$(grep -oP '^-\s*OSF_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          RDM_PYTHON_VERSION_OVERRIDE=$(grep -oP '^-\s*RDM_PYTHON_VERSION:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          EMBER_OVERRIDE=$(grep -oP '^-\s*EMBER_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          CAS_OVERRIDE=$(grep -oP '^-\s*CAS_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          MFR_OVERRIDE=$(grep -oP '^-\s*MFR_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
+          WB_OVERRIDE=$(grep -oP '^-\s*WB_IMAGE:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d ' \r' || true)
           EXCLUDE_NOTEBOOKS_OVERRIDE=$(grep -oP '^-\s*EXCLUDE_NOTEBOOKS:\s*\K.*$' /tmp/pr_body.txt | head -1 | tr -d '\r' || true)
 
           # Extract TLJH parameters from PR body
@@ -949,6 +970,7 @@ jobs:
           else
             export OSF_IMAGE="${OSF_OVERRIDE:-niicloudoperation/rdm-osf.io:latest}"
           fi
+          export RDM_PYTHON_VERSION="${RDM_PYTHON_VERSION_OVERRIDE:-3.6}"
           export EMBER_IMAGE="${EMBER_OVERRIDE:-niicloudoperation/rdm-ember-osf-web:latest}"
           export CAS_IMAGE="${CAS_OVERRIDE:-niicloudoperation/rdm-cas-overlay:latest}"
           export MFR_IMAGE="${MFR_OVERRIDE:-niicloudoperation/rdm-modular-file-renderer:latest}"
@@ -965,6 +987,7 @@ jobs:
           else
             export OSF_IMAGE="${{ github.event.inputs.osf_image || 'niicloudoperation/rdm-osf.io:latest' }}"
           fi
+          export RDM_PYTHON_VERSION="${{ github.event.inputs.rdm_python_version || '3.6' }}"
           export EMBER_IMAGE="${{ github.event.inputs.ember_image || 'niicloudoperation/rdm-ember-osf-web:latest' }}"
           export CAS_IMAGE="${{ github.event.inputs.cas_image || 'niicloudoperation/rdm-cas-overlay:latest' }}"
           export MFR_IMAGE="${{ github.event.inputs.mfr_image || 'niicloudoperation/rdm-modular-file-renderer:latest' }}"
@@ -975,8 +998,16 @@ jobs:
           fi
         fi
 
+        echo "RDM_PYTHON_VERSION=$RDM_PYTHON_VERSION" >> "$GITHUB_ENV"
         source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
-        create_docker_override
+        create_docker_override "$RDM_PYTHON_VERSION"
+
+    - name: Restore PostgreSQL after version change
+      if: matrix.test-group.migration_from != null
+      working-directory: RDM-osf.io
+      run: |
+        source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
+        restore_postgres_after_version_change
 
     - name: Install RDM requirements
       working-directory: RDM-osf.io
@@ -989,7 +1020,7 @@ jobs:
       working-directory: RDM-osf.io
       run: |
         source ${{ github.workspace }}/e2e-tests/.github/scripts/setup_rdm.sh
-        run_migrations
+        run_migrations "$RDM_PYTHON_VERSION"
         
     - name: Enable feature flags
       if: matrix.test-group.migration_from == null
@@ -1225,6 +1256,12 @@ jobs:
         echo "TLJH_URL=http://localhost" >> $GITHUB_ENV
         echo "TLJH_USERNAME=admin" >> $GITHUB_ENV
         echo "TLJH_PASSWORD=change-your-password" >> $GITHUB_ENV
+
+    - name: Start TLJH build diagnostics
+      if: env.JUPYTERHUB_ENABLED == 'true'
+      working-directory: e2e-tests
+      run: |
+        .github/scripts/setup_tljh.sh start-logs tljh-logs
 
     - name: Run post-migration tests
       if: matrix.test-group.migration_from.post_migration_notebook != null
@@ -1536,15 +1573,16 @@ jobs:
 
     - name: Collect TLJH logs
       if: always() && env.JUPYTERHUB_ENABLED == 'true'
+      working-directory: e2e-tests
       run: |
-        sudo journalctl -u jupyterhub > e2e-tests/jupyterhub-logs.txt 2>&1 || true
+        .github/scripts/setup_tljh.sh collect-logs tljh-logs
 
     - name: Upload TLJH logs
       if: always() && env.JUPYTERHUB_ENABLED == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: tljh-logs-${{ matrix.test-group.name }}
-        path: e2e-tests/jupyterhub-logs.txt
+        path: e2e-tests/tljh-logs/
         retention-days: 7
 
     - name: Collect Flowable logs

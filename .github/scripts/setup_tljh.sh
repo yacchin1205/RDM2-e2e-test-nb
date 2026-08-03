@@ -4,9 +4,32 @@ set -xeuo pipefail
 COMMAND=${1:-}
 
 if [[ -z "${COMMAND}" ]]; then
-  echo "Usage: $0 <install|down>" >&2
+  echo "Usage: $0 <install|start-logs|collect-logs|down> [output-directory]" >&2
   exit 1
 fi
+
+LOG_OUTPUT_DIR=${2:-tljh-logs}
+DOCKER_EVENTS_RAW=/tmp/tljh-repo2docker-events.jsonl
+
+redact_log() {
+  sed -E \
+    -e 's/(repo_token=)[^&"[:space:]]+/\1[redacted]/g' \
+    -e 's/(repo_token%3D)[^%&"[:space:]]+/\1[redacted]/g' \
+    -e 's/(GIT_CREDENTIAL_ENV=)[^"[:space:]]+/\1[redacted]/g'
+}
+
+write_docker_identity() {
+  local output_file="$1"
+
+  {
+    date -u +%Y-%m-%dT%H:%M:%SZ
+    echo "DOCKER_HOST=${DOCKER_HOST:-}"
+    echo "DOCKER_CONTEXT=${DOCKER_CONTEXT:-}"
+    sudo docker context show
+    sudo docker info --format 'ID={{.ID}} Name={{.Name}} ServerVersion={{.ServerVersion}} Driver={{.Driver}} DockerRootDir={{.DockerRootDir}}'
+    sudo stat /var/run/docker.sock
+  } > "${output_file}" 2>&1 || true
+}
 
 wait_for_url() {
   local url="$1"
@@ -125,6 +148,109 @@ EOF
 
     sudo systemctl restart jupyterhub
     wait_for_url "http://localhost"
+    ;;
+  start-logs)
+    mkdir -p "${LOG_OUTPUT_DIR}"
+    date -u +%Y-%m-%dT%H:%M:%SZ > "${LOG_OUTPUT_DIR}/docker-events-started-at.txt"
+    write_docker_identity "${LOG_OUTPUT_DIR}/docker-daemon-start.txt"
+
+    # Keep the raw event stream outside the artifact directory because Docker
+    # event attributes may contain the dynamically issued RDM repository token.
+    nohup sudo docker events \
+      --since "$(cat "${LOG_OUTPUT_DIR}/docker-events-started-at.txt")" \
+      --filter type=container \
+      --filter label=repo2docker.build \
+      --format '{{json .}}' \
+      > "${DOCKER_EVENTS_RAW}" 2>&1 &
+    event_pid=$!
+    echo "${event_pid}" > "${LOG_OUTPUT_DIR}/docker-events.pid"
+
+    sleep 1
+    if ! kill -0 "${event_pid}" 2>/dev/null; then
+      echo "Docker event collector exited during startup" >&2
+      redact_log < "${DOCKER_EVENTS_RAW}" >&2 || true
+      exit 1
+    fi
+    ;;
+  collect-logs)
+    mkdir -p "${LOG_OUTPUT_DIR}/build-containers"
+    date -u +%Y-%m-%dT%H:%M:%SZ > "${LOG_OUTPUT_DIR}/collected-at.txt"
+    write_docker_identity "${LOG_OUTPUT_DIR}/docker-daemon-end.txt"
+
+    raw_jupyterhub_log=/tmp/tljh-jupyterhub.log
+    sudo journalctl -u jupyterhub > "${raw_jupyterhub_log}" 2>&1 || true
+    redact_log < "${raw_jupyterhub_log}" \
+      > "${LOG_OUTPUT_DIR}/jupyterhub.log" || true
+    rm -f "${raw_jupyterhub_log}"
+
+    raw_docker_log=/tmp/tljh-docker-daemon.log
+    sudo journalctl -u docker \
+      --since "$(cat "${LOG_OUTPUT_DIR}/docker-events-started-at.txt")" \
+      > "${raw_docker_log}" 2>&1 || true
+    redact_log < "${raw_docker_log}" \
+      > "${LOG_OUTPUT_DIR}/docker-daemon.log" || true
+    rm -f "${raw_docker_log}"
+
+    {
+      event_pid=$(cat "${LOG_OUTPUT_DIR}/docker-events.pid" 2>/dev/null || true)
+      echo "PID=${event_pid}"
+      if [[ "${event_pid}" =~ ^[0-9]+$ ]] && sudo kill -0 "${event_pid}" 2>/dev/null; then
+        echo "STATUS=running"
+        sudo ps -p "${event_pid}" -o pid=,ppid=,etime=,args=
+      else
+        echo "STATUS=not-running"
+      fi
+    } > "${LOG_OUTPUT_DIR}/docker-events-collector.txt" 2>&1 || true
+
+    {
+      printf 'ID\tIMAGE\tSTATUS\tNAME\n'
+      sudo docker ps -a --no-trunc \
+        --format '{{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}'
+    } > "${LOG_OUTPUT_DIR}/all-containers.tsv" 2>&1 || true
+
+    {
+      printf 'ID\tIMAGE\tSTATUS\tNAME\tBUILD_IMAGE\tREF\n'
+      sudo docker ps -a --no-trunc \
+        --filter label=repo2docker.build \
+        --format '{{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}\t{{.Label "repo2docker.build"}}\t{{.Label "repo2docker.ref"}}'
+    } > "${LOG_OUTPUT_DIR}/build-containers.tsv" 2>&1 || true
+
+    sudo docker ps -aq --no-trunc \
+      --filter label=repo2docker.build \
+      > "${LOG_OUTPUT_DIR}/build-container-ids.txt" 2>/dev/null || true
+
+    while IFS= read -r container_id; do
+      if [[ -z "${container_id}" ]]; then
+        continue
+      fi
+      short_id=${container_id:0:12}
+      sudo docker inspect --format '{{json .State}}' "${container_id}" \
+        > "${LOG_OUTPUT_DIR}/build-containers/${short_id}.state.json" 2>&1 || true
+      sudo docker inspect --format $'ID={{.Id}}\nName={{.Name}}\nImage={{.Config.Image}}\nBuildImage={{index .Config.Labels "repo2docker.build"}}\nRef={{index .Config.Labels "repo2docker.ref"}}' "${container_id}" \
+        > "${LOG_OUTPUT_DIR}/build-containers/${short_id}.metadata.txt" 2>&1 || true
+
+      raw_container_log="/tmp/tljh-repo2docker-${short_id}.log"
+      sudo docker logs --timestamps "${container_id}" \
+        > "${raw_container_log}" 2>&1 || true
+      redact_log < "${raw_container_log}" \
+        > "${LOG_OUTPUT_DIR}/build-containers/${short_id}.log" || true
+      rm -f "${raw_container_log}"
+    done < "${LOG_OUTPUT_DIR}/build-container-ids.txt"
+
+    {
+      printf 'ID\tREPOSITORY\tTAG\tSIZE\tCREATED_AT\n'
+      sudo docker image ls --no-trunc \
+        --filter label=repo2docker.ref \
+        --format '{{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}'
+    } > "${LOG_OUTPUT_DIR}/built-images.tsv" 2>&1 || true
+
+    if [[ -f "${DOCKER_EVENTS_RAW}" ]]; then
+      redact_log < "${DOCKER_EVENTS_RAW}" \
+        > "${LOG_OUTPUT_DIR}/docker-events.jsonl" || true
+    else
+      echo "Docker event stream was not found: ${DOCKER_EVENTS_RAW}" \
+        > "${LOG_OUTPUT_DIR}/docker-events.jsonl"
+    fi
     ;;
   down)
     sudo systemctl stop jupyterhub || true
