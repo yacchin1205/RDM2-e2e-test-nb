@@ -19,6 +19,7 @@ current_contexts = None
 default_last_path = None
 context_close_on_fail = True
 current_ignore_https_errors = False
+current_locale = 'ja-JP'
 temp_dir = None
 console_messages = []
 
@@ -43,7 +44,7 @@ async def run_pw(f, last_path=default_last_path, screenshot=True, permissions=No
         else:
             current_browser = await playwright.chromium.launch(
                 headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage", "--lang=ja"],
+                args=["--no-sandbox", "--disable-dev-shm-usage", f"--lang={current_locale.split('-')[0]}"],
             )
     
     global current_contexts
@@ -53,7 +54,7 @@ async def run_pw(f, last_path=default_last_path, screenshot=True, permissions=No
         har_path = os.path.join(temp_dir, 'har.zip')
 
         context = await current_browser.new_context(
-            locale="ja-JP",
+            locale=current_locale,
             record_video_dir=videos_dir,
             record_har_path=har_path,
             ignore_https_errors=current_ignore_https_errors,
@@ -125,8 +126,9 @@ async def close_latest_page(last_path=None):
     current_contexts = current_contexts[:-1]
     await current_context.close()
 
-async def init_pw_context(close_on_fail=True, last_path=None, browser_type='chromium', ignore_https_errors=False):
-    global playwright, current_session_id, default_last_path, current_browser, current_browser_type, temp_dir, context_close_on_fail, current_ignore_https_errors, current_contexts, console_messages
+async def init_pw_context(close_on_fail=True, last_path=None, browser_type='chromium', ignore_https_errors=False, locale='ja-JP'):
+    global playwright, current_session_id, default_last_path, current_browser, current_browser_type, temp_dir, context_close_on_fail, current_ignore_https_errors, current_contexts, console_messages, current_locale
+    current_locale = locale
     if current_browser is not None:
         await current_browser.close()
         current_browser = None
