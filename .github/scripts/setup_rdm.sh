@@ -85,8 +85,8 @@ start_rdm_services() {
 
     SERVICES="kaken_elasticsearch $SERVICES"
     
-    if [ "${MINIO_ENABLED:-false}" = "true" ]; then
-        SERVICES="$SERVICES minio"
+    if [ "${RUSTFS_ENABLED:-false}" = "true" ]; then
+        SERVICES="$SERVICES rustfs"
     fi
 
     echo "Starting services: $SERVICES"
@@ -336,10 +336,10 @@ EOL
     echo "" >> .docker-compose.wb.env
     echo "SERVER_CONFIG_DOMAIN=http://192.168.168.167:7777" >> .docker-compose.wb.env
 
-    if [ "${MINIO_ENABLED:-false}" = "true" ]; then
+    if [ "${RUSTFS_ENABLED:-false}" = "true" ]; then
         local script_dir
         script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        bash "${script_dir}/setup_minio.sh" apply "${PWD}"
+        bash "${script_dir}/setup_rustfs.sh" apply "${PWD}"
     fi
 
     if [ "${WEKO_ENABLED:-false}" = "true" ] || [ "${MIBYO_DB_ENABLED:-false}" = "true" ]; then

@@ -118,7 +118,7 @@ jobs:
             skip_admin: true
             skip_metadata: false
             skip_autofill: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: false
@@ -133,7 +133,7 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: false
@@ -146,7 +146,7 @@ jobs:
             skip_metadata: true
             skip_default_storage: true
             skip_login: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: false
@@ -189,7 +189,7 @@ jobs:
               テスト手順-管理者機能-アナウンス.ipynb
               テスト手順-管理者機能-証跡管理.ipynb
               テスト手順-管理者機能-NIIストレージのクォータ.ipynb
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: false
@@ -211,7 +211,7 @@ jobs:
             exclude_notebooks: |
               テスト手順-WEKOアドオン-メタデータ送信-書誌情報.ipynb
               テスト手順-WEKOアドオン-メタデータ送信-書誌情報＋根拠データ.ipynb
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: true
             mibyo_db_enabled: false
             weko_test_mode: direct
@@ -222,8 +222,8 @@ jobs:
             jupyterhub_enabled: false
             flowable_enabled: false
             wiki_enabled: false
-          - name: user-minio
-            display_name: "User Tests (MinIO)"
+          - name: user-rustfs
+            display_name: "User Tests (RustFS)"
             include_admin: false
             skip_admin: true
             skip_metadata: false
@@ -231,22 +231,22 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: true
+            rustfs_enabled: true
             s3compatsigv4_enabled: true
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: false
             flowable_enabled: false
             wiki_enabled: false
-          - name: admin-minio
-            display_name: "Admin Tests (MinIO)"
+          - name: admin-rustfs
+            display_name: "Admin Tests (RustFS)"
             include_admin: true
             skip_admin: true
             skip_metadata: true
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: true
+            rustfs_enabled: true
             s3compatsigv4_institutional_storage: true
             weko_enabled: false
             mibyo_db_enabled: false
@@ -261,7 +261,7 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: true
             weko_test_mode: direct
             mibyo_db_enabled: false
@@ -276,7 +276,7 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: true
             weko_test_mode: workflow
             mibyo_db_enabled: false
@@ -291,7 +291,7 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: true
@@ -305,7 +305,7 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: false
@@ -320,7 +320,7 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: false
@@ -335,7 +335,7 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: false
@@ -351,7 +351,7 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: false
             jupyterhub_enabled: false
@@ -366,7 +366,7 @@ jobs:
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
-            minio_enabled: false
+            rustfs_enabled: false
             weko_enabled: false
             mibyo_db_enabled: true
             jupyterhub_enabled: false
@@ -374,7 +374,7 @@ jobs:
             wiki_enabled: false
     name: E2E ${{ matrix.test-group.display_name }}
     env:
-      MINIO_ENABLED: ${{ matrix.test-group.minio_enabled == true && 'true' || 'false' }}
+      RUSTFS_ENABLED: ${{ matrix.test-group.rustfs_enabled == true && 'true' || 'false' }}
       S3COMPATSIGV4_ENABLED: ${{ matrix.test-group.s3compatsigv4_enabled == true && 'true' || 'false' }}
       S3COMPATSIGV4_INST_ENABLED: ${{ matrix.test-group.s3compatsigv4_institutional_storage == true && 'true' || 'false' }}
       WEKO_ENABLED: ${{ matrix.test-group.weko_enabled == true && 'true' || 'false' }}
@@ -382,12 +382,12 @@ jobs:
       FLOWABLE_ENABLED: ${{ matrix.test-group.flowable_enabled == true && 'true' || 'false' }}
       MIBYO_DB_ENABLED: ${{ matrix.test-group.mibyo_db_enabled == true && 'true' || 'false' }}
       WIKI_ENABLED: ${{ (matrix.test-group.wiki_enabled == true || github.event.inputs.enable_wiki == 'true') && 'true' || 'false' }}
-      MINIO_ROOT_USER: e2eadmin
-      MINIO_ROOT_PASSWORD: e2epassword123
-      MINIO_ALIAS: ci-minio
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_REGION: us-east-1
-      MINIO_SERVICE_NAME: MinIO (CI)
+      RUSTFS_ACCESS_KEY: e2eadmin
+      RUSTFS_SECRET_KEY: e2epassword123
+      RUSTFS_ALIAS: ci-rustfs
+      RUSTFS_ENDPOINT: http://rustfs:9000
+      RUSTFS_REGION: us-east-1
+      RUSTFS_SERVICE_NAME: RustFS (CI)
 
     steps:
     - name: Checkout test repository
@@ -1033,8 +1033,8 @@ jobs:
         docker-compose exec -T web python3 /tmp/seed_kaken_es.py /tmp/kaken_seed.json "$NRID_URL"
         rm "$JSON_FILE"
 
-    - name: Initialize MinIO for S3 compatibility tests
-      if: env.MINIO_ENABLED == 'true'
+    - name: Initialize RustFS for S3 compatibility tests
+      if: env.RUSTFS_ENABLED == 'true'
       working-directory: e2e-tests
       run: |
         set -eu
@@ -1056,14 +1056,14 @@ jobs:
         BUCKET_NAME_1="${BUCKET_PREFIX}-a"
         BUCKET_NAME_2="${BUCKET_PREFIX}-b"
 
-        export MINIO_VERIFY_LARGE_UPLOAD=true
+        export RUSTFS_VERIFY_LARGE_UPLOAD=true
 
-        .github/scripts/setup_minio_buckets.sh \
+        .github/scripts/setup_rustfs_buckets.sh \
           ../RDM-osf.io \
-          "${MINIO_ALIAS}" \
-          "${MINIO_ENDPOINT}" \
-          "${MINIO_ROOT_USER}" \
-          "${MINIO_ROOT_PASSWORD}" \
+          "${RUSTFS_ALIAS}" \
+          "${RUSTFS_ENDPOINT}" \
+          "${RUSTFS_ACCESS_KEY}" \
+          "${RUSTFS_SECRET_KEY}" \
           "${ACCESS_KEY_1}" "${SECRET_KEY_1}" "${BUCKET_NAME_1}" \
           "${ACCESS_KEY_2}" "${SECRET_KEY_2}" "${BUCKET_NAME_2}"
 
@@ -1073,12 +1073,12 @@ jobs:
         echo "S3COMPAT_SECRET_KEY_2=${SECRET_KEY_2}" >> $GITHUB_ENV
         echo "S3COMPAT_BUCKET_NAME_1=${BUCKET_NAME_1}" >> $GITHUB_ENV
         echo "S3COMPAT_BUCKET_NAME_2=${BUCKET_NAME_2}" >> $GITHUB_ENV
-        echo "S3COMPAT_REGION=${MINIO_REGION}" >> $GITHUB_ENV
-        echo "S3COMPAT_ENDPOINT=${MINIO_ENDPOINT}" >> $GITHUB_ENV
-        echo "S3COMPAT_SERVICE_NAME=${MINIO_SERVICE_NAME}" >> $GITHUB_ENV
+        echo "S3COMPAT_REGION=${RUSTFS_REGION}" >> $GITHUB_ENV
+        echo "S3COMPAT_ENDPOINT=${RUSTFS_ENDPOINT}" >> $GITHUB_ENV
+        echo "S3COMPAT_SERVICE_NAME=${RUSTFS_SERVICE_NAME}" >> $GITHUB_ENV
 
-    - name: Initialize MinIO for S3CompatSigV4 tests
-      if: env.MINIO_ENABLED == 'true' && (env.S3COMPATSIGV4_ENABLED == 'true' || env.S3COMPATSIGV4_INST_ENABLED == 'true')
+    - name: Initialize RustFS for S3CompatSigV4 tests
+      if: env.RUSTFS_ENABLED == 'true' && (env.S3COMPATSIGV4_ENABLED == 'true' || env.S3COMPATSIGV4_INST_ENABLED == 'true')
       working-directory: e2e-tests
       run: |
         set -eu
@@ -1102,12 +1102,12 @@ jobs:
           BUCKET_NAME_1="${BUCKET_PREFIX}-a"
           BUCKET_NAME_2="${BUCKET_PREFIX}-b"
 
-          .github/scripts/setup_minio_buckets.sh \
+          .github/scripts/setup_rustfs_buckets.sh \
             ../RDM-osf.io \
-            "${MINIO_ALIAS}" \
-            "${MINIO_ENDPOINT}" \
-            "${MINIO_ROOT_USER}" \
-            "${MINIO_ROOT_PASSWORD}" \
+            "${RUSTFS_ALIAS}" \
+            "${RUSTFS_ENDPOINT}" \
+            "${RUSTFS_ACCESS_KEY}" \
+            "${RUSTFS_SECRET_KEY}" \
             "${ACCESS_KEY_1}" "${SECRET_KEY_1}" "${BUCKET_NAME_1}" \
             "${ACCESS_KEY_2}" "${SECRET_KEY_2}" "${BUCKET_NAME_2}"
 
@@ -1117,43 +1117,31 @@ jobs:
           echo "S3COMPATSIGV4_SECRET_KEY_2=${SECRET_KEY_2}" >> $GITHUB_ENV
           echo "S3COMPATSIGV4_BUCKET_NAME_1=${BUCKET_NAME_1}" >> $GITHUB_ENV
           echo "S3COMPATSIGV4_BUCKET_NAME_2=${BUCKET_NAME_2}" >> $GITHUB_ENV
-          echo "S3COMPATSIGV4_ENDPOINT=${MINIO_ENDPOINT}" >> $GITHUB_ENV
-          echo "S3COMPATSIGV4_SERVICE_NAME=${MINIO_SERVICE_NAME}" >> $GITHUB_ENV
+          echo "S3COMPATSIGV4_ENDPOINT=${RUSTFS_ENDPOINT}" >> $GITHUB_ENV
+          echo "S3COMPATSIGV4_SERVICE_NAME=${RUSTFS_SERVICE_NAME}" >> $GITHUB_ENV
         fi
 
         if [ "${S3COMPATSIGV4_INST_ENABLED}" = "true" ]; then
           INST_ACCESS_KEY="ci$(key_part)"
           INST_SECRET_KEY="$(secret_part)"
           INST_BUCKET="${BUCKET_PREFIX}-inst"
-          # Second bucket is required by setup_minio_buckets.sh but not used for inst storage
+          # Second bucket is required by setup_rustfs_buckets.sh but not used for inst storage
           INST_BUCKET_DUMMY="${BUCKET_PREFIX}-inst2"
 
-          .github/scripts/setup_minio_buckets.sh \
+          .github/scripts/setup_rustfs_buckets.sh \
             ../RDM-osf.io \
-            "${MINIO_ALIAS}" \
-            "${MINIO_ENDPOINT}" \
-            "${MINIO_ROOT_USER}" \
-            "${MINIO_ROOT_PASSWORD}" \
+            "${RUSTFS_ALIAS}" \
+            "${RUSTFS_ENDPOINT}" \
+            "${RUSTFS_ACCESS_KEY}" \
+            "${RUSTFS_SECRET_KEY}" \
             "${INST_ACCESS_KEY}" "${INST_SECRET_KEY}" "${INST_BUCKET}" \
             "${INST_ACCESS_KEY}" "${INST_SECRET_KEY}" "${INST_BUCKET_DUMMY}"
 
           echo "S3COMPATSIGV4_INST_ACCESS_KEY=${INST_ACCESS_KEY}" >> $GITHUB_ENV
           echo "S3COMPATSIGV4_INST_SECRET_KEY=${INST_SECRET_KEY}" >> $GITHUB_ENV
           echo "S3COMPATSIGV4_INST_BUCKET=${INST_BUCKET}" >> $GITHUB_ENV
-          echo "S3COMPATSIGV4_INST_ENDPOINT=${MINIO_ENDPOINT}" >> $GITHUB_ENV
+          echo "S3COMPATSIGV4_INST_ENDPOINT=${RUSTFS_ENDPOINT}" >> $GITHUB_ENV
         fi
-
-    - name: Start MinIO trace
-      if: env.MINIO_ENABLED == 'true'
-      working-directory: RDM-osf.io
-      run: |
-        set -eu
-        docker-compose run -d --name minio-trace --entrypoint /bin/sh minio-mc -c "
-          set -euo pipefail
-          mc alias set ${MINIO_ALIAS} ${MINIO_ENDPOINT} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}
-          mc admin trace --json --verbose --errors --path '${S3COMPAT_BUCKET_NAME_1}/*' --path '${S3COMPAT_BUCKET_NAME_2}/*' ${MINIO_ALIAS}
-        "
-
 
     - name: Test endpoint accessibility
       working-directory: RDM-osf.io
@@ -1374,8 +1362,8 @@ jobs:
         EOF
 
         args=(ci.config.yaml base_ci.config.yaml)
-        if [ "${MINIO_ENABLED}" = "true" ]; then
-          args+=(--minio)
+        if [ "${RUSTFS_ENABLED}" = "true" ]; then
+          args+=(--rustfs)
         fi
         if [ "${JUPYTERHUB_ENABLED}" = "true" ]; then
           args+=(--jupyterhub)
@@ -1501,24 +1489,6 @@ jobs:
         name: test-results-full-${{ matrix.test-group.name }}
         path: e2e-tests/result/
         retention-days: 7
-
-    - name: Collect MinIO trace
-      if: always() && env.MINIO_ENABLED == 'true'
-      working-directory: RDM-osf.io
-      run: |
-        set -eu
-        if docker ps -a --format '{{.Names}}' | grep -q '^minio-trace$'; then
-          docker logs minio-trace > ../e2e-tests/minio-trace.log || true
-          docker rm -f minio-trace || true
-        fi
-
-    - name: Upload MinIO trace
-      if: always() && env.MINIO_ENABLED == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: minio-trace-${{ matrix.test-group.name }}
-        path: e2e-tests/minio-trace.log
-        if-no-files-found: ignore
 
     - name: Collect WEKO logs
       if: always() && (env.WEKO_ENABLED == 'true' || env.MIBYO_DB_ENABLED == 'true')

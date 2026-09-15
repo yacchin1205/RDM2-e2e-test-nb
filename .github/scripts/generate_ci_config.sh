@@ -3,7 +3,7 @@ set -xeuo pipefail
 
 if [[ $# -lt 2 ]]; then
   cat >&2 <<'USAGE'
-Usage: generate_ci_config.sh <output_path> <base_config_yaml> [--minio] [--jupyterhub] [--weko] [--flowable] [--s3compatsigv4] [--s3compatsigv4-inst] [--wiki]
+Usage: generate_ci_config.sh <output_path> <base_config_yaml> [--rustfs] [--jupyterhub] [--weko] [--flowable] [--s3compatsigv4] [--s3compatsigv4-inst] [--wiki]
 USAGE
   exit 1
 fi
@@ -11,7 +11,7 @@ fi
 OUTPUT=$1
 BASE_CONFIG=$2
 shift 2
-MINIO=false
+RUSTFS=false
 JUPYTERHUB=false
 WEKO=false
 FLOWABLE=false
@@ -21,8 +21,8 @@ WIKI=false
 
 for arg in "$@"; do
   case "$arg" in
-    --minio)
-      MINIO=true
+    --rustfs)
+      RUSTFS=true
       ;;
     --jupyterhub)
       JUPYTERHUB=true
@@ -52,7 +52,7 @@ done
 
 cp "${BASE_CONFIG}" "${OUTPUT}"
 
-if [[ "${MINIO}" == "true" ]]; then
+if [[ "${RUSTFS}" == "true" ]]; then
   if [[ -z "${S3COMPAT_ACCESS_KEY_1:-}" || -z "${S3COMPAT_SECRET_KEY_1:-}" ]]; then
     echo "S3 compat credentials are not set" >&2
     exit 1

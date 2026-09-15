@@ -2,10 +2,10 @@
 set -xeuo pipefail
 
 # Usage:
-#   ./setup_minio.sh apply <rdm_root_dir>
+#   ./setup_rustfs.sh apply <rdm_root_dir>
 #
 # Generates docker-compose override entries and s3compat settings
-# required for MinIO usage within the E2E environment.
+# required for RustFS usage within the E2E environment.
 
 COMMAND=${1:-}
 RDM_ROOT=${2:-}
@@ -29,28 +29,24 @@ if [[ ! -d "${RDM_ROOT}" ]]; then
   exit 1
 fi
 
-MINIO_IMAGE_DEFAULT=${MINIO_IMAGE:-minio/minio:latest}
-MINIO_MC_IMAGE_DEFAULT=${MINIO_MC_IMAGE:-minio/mc:latest}
+RUSTFS_IMAGE_DEFAULT=${RUSTFS_IMAGE:-rustfs/rustfs:latest}
+RUSTFS_RC_IMAGE_DEFAULT=${RUSTFS_RC_IMAGE:-rustfs/rc:latest}
 
-MINIO_DOCKER_SNIPPET=$(cat <<YAML
-  minio:
-    image: ${MINIO_IMAGE_DEFAULT}
+RUSTFS_DOCKER_SNIPPET=$(cat <<YAML
+  rustfs:
+    image: ${RUSTFS_IMAGE_DEFAULT}
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    command: server /data --console-address :9001
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      RUSTFS_OBS_LOG_STDOUT_ENABLED: "true"
     expose:
       - "9000"
-      - "9001"
 
-  minio-mc:
-    image: ${MINIO_MC_IMAGE_DEFAULT}
-    entrypoint: ["mc"]
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  rustfs-rc:
+    image: ${RUSTFS_RC_IMAGE_DEFAULT}
+    entrypoint: ["rc"]
     depends_on:
-      - minio
+      - rustfs
 YAML
 )
 
@@ -60,8 +56,8 @@ if ! grep -q '^services:' "${compose_override}"; then
   echo "services:" > "${compose_override}"
 fi
 
-if ! grep -q '^  minio:' "${compose_override}"; then
-  printf '\n%s\n' "${MINIO_DOCKER_SNIPPET}" >> "${compose_override}"
+if ! grep -q '^  rustfs:' "${compose_override}"; then
+  printf '\n%s\n' "${RUSTFS_DOCKER_SNIPPET}" >> "${compose_override}"
 fi
 
 settings_json="${RDM_ROOT}/addons/s3compat/static/settings.json"
@@ -81,8 +77,8 @@ src, dst = sys.argv[1:3]
 with open(src) as f:
     data = json.load(f)
 
-service_name = "MinIO (CI)"
-host = "minio:9000"
+service_name = "RustFS (CI)"
+host = "rustfs:9000"
 
 available_services = data.setdefault("availableServices", [])
 
@@ -109,7 +105,7 @@ PY
 
 mv "${tmp_json}" "${settings_json}"
 
-# Also register MinIO service for s3compatsigv4 addon if available
+# Also register RustFS service for s3compatsigv4 addon if available
 sigv4_settings_json="${RDM_ROOT}/addons/s3compatsigv4/static/settings.json"
 
 if [[ -f "${sigv4_settings_json}" ]]; then
@@ -123,8 +119,8 @@ src, dst = sys.argv[1:3]
 with open(src) as f:
     data = json.load(f)
 
-service_name = "MinIO (CI)"
-host = "minio:9000"
+service_name = "RustFS (CI)"
+host = "rustfs:9000"
 
 available_services = data.setdefault("availableServices", [])
 
@@ -150,9 +146,9 @@ with open(dst, "w") as f:
 PY
 
   mv "${tmp_json_sigv4}" "${sigv4_settings_json}"
-  echo "MinIO configuration applied for s3compatsigv4"
+  echo "RustFS configuration applied for s3compatsigv4"
 else
   echo "WARNING: s3compatsigv4 settings.json not found: ${sigv4_settings_json} (skipping)"
 fi
 
-echo "MinIO configuration applied"
+echo "RustFS configuration applied"
