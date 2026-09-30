@@ -1490,6 +1490,20 @@ jobs:
         path: e2e-tests/result/
         retention-days: 7
 
+    - name: Collect RustFS logs
+      if: always() && env.RUSTFS_ENABLED == 'true'
+      working-directory: RDM-osf.io
+      run: |
+        docker-compose logs --timestamps rustfs > ../e2e-tests/rustfs-logs.txt 2>&1
+
+    - name: Upload RustFS logs
+      if: always() && env.RUSTFS_ENABLED == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: rustfs-logs-${{ matrix.test-group.name }}
+        path: e2e-tests/rustfs-logs.txt
+        retention-days: 7
+
     - name: Collect WEKO logs
       if: always() && (env.WEKO_ENABLED == 'true' || env.MIBYO_DB_ENABLED == 'true')
       working-directory: weko

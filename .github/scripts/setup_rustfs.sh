@@ -39,6 +39,7 @@ RUSTFS_DOCKER_SNIPPET=$(cat <<YAML
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
       RUSTFS_OBS_LOG_STDOUT_ENABLED: "true"
+      RUSTFS_OBS_LOGGER_LEVEL: info
     expose:
       - "9000"
 
