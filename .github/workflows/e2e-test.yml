@@ -386,7 +386,6 @@ jobs:
       RUSTFS_SECRET_KEY: e2epassword123
       RUSTFS_ALIAS: ci-rustfs
       RUSTFS_ENDPOINT: http://rustfs:9000
-      RUSTFS_REGION: us-east-1
       RUSTFS_SERVICE_NAME: RustFS (CI)
 
     steps:
@@ -1033,50 +1032,6 @@ jobs:
         docker-compose exec -T web python3 /tmp/seed_kaken_es.py /tmp/kaken_seed.json "$NRID_URL"
         rm "$JSON_FILE"
 
-    - name: Initialize RustFS for S3 compatibility tests
-      if: env.RUSTFS_ENABLED == 'true'
-      working-directory: e2e-tests
-      run: |
-        set -eu
-
-        key_part() {
-          LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 18
-        }
-
-        secret_part() {
-          LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 40
-        }
-
-        ACCESS_KEY_1="ci$(key_part)"
-        SECRET_KEY_1="$(secret_part)"
-        ACCESS_KEY_2="ci$(key_part)"
-        SECRET_KEY_2="$(secret_part)"
-
-        BUCKET_PREFIX="ci-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}"
-        BUCKET_NAME_1="${BUCKET_PREFIX}-a"
-        BUCKET_NAME_2="${BUCKET_PREFIX}-b"
-
-        export RUSTFS_VERIFY_LARGE_UPLOAD=true
-
-        .github/scripts/setup_rustfs_buckets.sh \
-          ../RDM-osf.io \
-          "${RUSTFS_ALIAS}" \
-          "${RUSTFS_ENDPOINT}" \
-          "${RUSTFS_ACCESS_KEY}" \
-          "${RUSTFS_SECRET_KEY}" \
-          "${ACCESS_KEY_1}" "${SECRET_KEY_1}" "${BUCKET_NAME_1}" \
-          "${ACCESS_KEY_2}" "${SECRET_KEY_2}" "${BUCKET_NAME_2}"
-
-        echo "S3COMPAT_ACCESS_KEY_1=${ACCESS_KEY_1}" >> $GITHUB_ENV
-        echo "S3COMPAT_SECRET_KEY_1=${SECRET_KEY_1}" >> $GITHUB_ENV
-        echo "S3COMPAT_ACCESS_KEY_2=${ACCESS_KEY_2}" >> $GITHUB_ENV
-        echo "S3COMPAT_SECRET_KEY_2=${SECRET_KEY_2}" >> $GITHUB_ENV
-        echo "S3COMPAT_BUCKET_NAME_1=${BUCKET_NAME_1}" >> $GITHUB_ENV
-        echo "S3COMPAT_BUCKET_NAME_2=${BUCKET_NAME_2}" >> $GITHUB_ENV
-        echo "S3COMPAT_REGION=${RUSTFS_REGION}" >> $GITHUB_ENV
-        echo "S3COMPAT_ENDPOINT=${RUSTFS_ENDPOINT}" >> $GITHUB_ENV
-        echo "S3COMPAT_SERVICE_NAME=${RUSTFS_SERVICE_NAME}" >> $GITHUB_ENV
-
     - name: Initialize RustFS for S3CompatSigV4 tests
       if: env.RUSTFS_ENABLED == 'true' && (env.S3COMPATSIGV4_ENABLED == 'true' || env.S3COMPATSIGV4_INST_ENABLED == 'true')
       working-directory: e2e-tests
@@ -1092,6 +1047,8 @@ jobs:
         }
 
         BUCKET_PREFIX="ci-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}-sigv4"
+
+        export RUSTFS_VERIFY_LARGE_UPLOAD=true
 
         if [ "${S3COMPATSIGV4_ENABLED}" = "true" ]; then
           ACCESS_KEY_1="ci$(key_part)"
@@ -1362,9 +1319,6 @@ jobs:
         EOF
 
         args=(ci.config.yaml base_ci.config.yaml)
-        if [ "${RUSTFS_ENABLED}" = "true" ]; then
-          args+=(--rustfs)
-        fi
         if [ "${JUPYTERHUB_ENABLED}" = "true" ]; then
           args+=(--jupyterhub)
         fi
