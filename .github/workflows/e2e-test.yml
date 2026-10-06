@@ -608,6 +608,15 @@ jobs:
           -f docker/elasticsearch/Dockerfile.amd64 docker/elasticsearch
         echo "ELASTICSEARCH_IMAGE=elasticsearch-kuromoji:amd64" >> "$GITHUB_ENV"
 
+    - name: Build MinIO images from source
+      if: env.MINIO_ENABLED == 'true'
+      working-directory: e2e-tests
+      run: |
+        docker build -t minio-source:local -f docker/minio/Dockerfile.minio docker/minio
+        docker build -t minio-mc-source:local -f docker/minio/Dockerfile.mc docker/minio
+        echo "MINIO_IMAGE=minio-source:local" >> "$GITHUB_ENV"
+        echo "MINIO_MC_IMAGE=minio-mc-source:local" >> "$GITHUB_ENV"
+
     - name: Install Docker Compose
       run: |
         sudo curl -L "https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
