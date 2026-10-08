@@ -39,6 +39,20 @@ on:
         description: 'Custom MFR image (default: niicloudoperation/rdm-modular-file-renderer:latest)'
         required: false
         default: ''
+      mfr_repository:
+        description: 'MFR source repository (used with mfr_branch)'
+        required: false
+        default: ''
+      mfr_branch:
+        description: 'MFR branch or commit to build instead of using mfr_image'
+        required: false
+        default: ''
+      mfr_celery:
+        description: 'Run MFR with a Celery worker and unoserver'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
       wb_image:
         description: 'Custom WaterButler image (default: niicloudoperation/rdm-waterbutler:latest)'
         required: false
@@ -108,12 +122,50 @@ jobs:
   build-images:
     runs-on: ubuntu-latest
     outputs:
+      mfr_custom: ${{ steps.mfr_params.outputs.branch != '' }}
+      mfr_celery: ${{ steps.mfr_params.outputs.celery }}
       wb_custom: ${{ steps.wb_params.outputs.branch != '' }}
     steps:
     - name: Checkout test repository
       uses: actions/checkout@v4
       with:
         path: e2e-tests
+
+    - name: Parse MFR parameters
+      id: mfr_params
+      env:
+        PR_BODY: ${{ github.event.pull_request.body }}
+        MFR_REPOSITORY: ${{ github.event.inputs.mfr_repository }}
+        MFR_BRANCH: ${{ github.event.inputs.mfr_branch }}
+        MFR_CELERY: ${{ github.event.inputs.mfr_celery }}
+      run: |
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          MFR_REPOSITORY=$(printf '%s\n' "$PR_BODY" | sed -nE 's/^- MFR_REPOSITORY:[[:blank:]]*(.*)/\1/p' | tr -d '\r')
+          MFR_BRANCH=$(printf '%s\n' "$PR_BODY" | sed -nE 's/^- MFR_BRANCH:[[:blank:]]*(.*)/\1/p' | tr -d '\r')
+          MFR_CELERY=$(printf '%s\n' "$PR_BODY" | sed -nE 's/^- MFR_CELERY:[[:blank:]]*(.*)/\1/p' | tr -d '\r')
+        fi
+        echo "repository=$MFR_REPOSITORY" >> "$GITHUB_OUTPUT"
+        echo "branch=$MFR_BRANCH" >> "$GITHUB_OUTPUT"
+        echo "celery=${MFR_CELERY:-false}" >> "$GITHUB_OUTPUT"
+
+    - name: Checkout custom MFR source
+      if: steps.mfr_params.outputs.branch != ''
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ steps.mfr_params.outputs.repository || 'RCOSDP/RDM-modular-file-renderer' }}
+        ref: ${{ steps.mfr_params.outputs.branch }}
+        path: RDM-modular-file-renderer
+
+    - name: Build custom MFR image
+      if: steps.mfr_params.outputs.branch != ''
+      working-directory: RDM-modular-file-renderer
+      run: |
+        revision=$(git rev-parse HEAD)
+        docker build --build-arg GIT_COMMIT="$revision" \
+          --label "org.opencontainers.image.revision=$revision" \
+          -t rdm-mfr:custom .
+        mkdir -p ../prebuilt-images
+        docker save rdm-mfr:custom | gzip -1 > ../prebuilt-images/rdm-mfr-custom.tar.gz
 
     - name: Build Elasticsearch image with Kuromoji (amd64)
       working-directory: e2e-tests
@@ -184,6 +236,7 @@ jobs:
       matrix:
         test-group:
           - name: user
+            mfr_preview_enabled: true
             display_name: "User Tests"
             include_admin: false
             skip_admin: true
@@ -445,6 +498,10 @@ jobs:
             wiki_enabled: false
     name: E2E ${{ matrix.test-group.display_name }}
     env:
+      WB_CUSTOM: ${{ needs.build-images.outputs.wb_custom }}
+      MFR_CUSTOM: ${{ needs.build-images.outputs.mfr_custom }}
+      MFR_CELERY: ${{ needs.build-images.outputs.mfr_celery }}
+      MFR_PREVIEW_ENABLED: ${{ matrix.test-group.mfr_preview_enabled == true && 'true' || 'false' }}
       MINIO_ENABLED: ${{ matrix.test-group.minio_enabled == true && 'true' || 'false' }}
       S3COMPATSIGV4_ENABLED: ${{ matrix.test-group.s3compatsigv4_enabled == true && 'true' || 'false' }}
       S3COMPATSIGV4_INST_ENABLED: ${{ matrix.test-group.s3compatsigv4_institutional_storage == true && 'true' || 'false' }}
@@ -693,6 +750,10 @@ jobs:
           docker load -i prebuilt-images/rdm-waterbutler-custom.tar
           echo "WB_IMAGE=rdm-waterbutler:custom" >> "$GITHUB_ENV"
         fi
+        if [ "$MFR_CUSTOM" = "true" ]; then
+          docker load -i prebuilt-images/rdm-mfr-custom.tar.gz
+          echo "MFR_IMAGE=rdm-mfr:custom" >> "$GITHUB_ENV"
+        fi
         rm -rf prebuilt-images
 
     - name: Install Docker Compose
@@ -720,6 +781,9 @@ jobs:
         export OSF_IMAGE="${{ matrix.test-group.migration_from.osf_image }}"
         export EMBER_IMAGE="${{ matrix.test-group.migration_from.ember_image }}"
         export CAS_IMAGE="${{ matrix.test-group.migration_from.cas_image }}"
+        export WB_CUSTOM=false
+        export MFR_CUSTOM=false
+        export MFR_CELERY=false
         export MFR_IMAGE="${{ matrix.test-group.migration_from.mfr_image }}"
         export WB_IMAGE="${{ matrix.test-group.migration_from.wb_image }}"
         create_docker_override
@@ -1006,7 +1070,7 @@ jobs:
           fi
           export EMBER_IMAGE="${EMBER_OVERRIDE:-niicloudoperation/rdm-ember-osf-web:latest}"
           export CAS_IMAGE="${CAS_OVERRIDE:-niicloudoperation/rdm-cas-overlay:latest}"
-          export MFR_IMAGE="${MFR_OVERRIDE:-niicloudoperation/rdm-modular-file-renderer:latest}"
+          export MFR_IMAGE="${MFR_IMAGE:-${MFR_OVERRIDE:-niicloudoperation/rdm-modular-file-renderer:latest}}"
           if [[ -n "$WB_IMAGE" ]]; then
             export WB_IMAGE
           else
@@ -1022,7 +1086,7 @@ jobs:
           fi
           export EMBER_IMAGE="${{ github.event.inputs.ember_image || 'niicloudoperation/rdm-ember-osf-web:latest' }}"
           export CAS_IMAGE="${{ github.event.inputs.cas_image || 'niicloudoperation/rdm-cas-overlay:latest' }}"
-          export MFR_IMAGE="${{ github.event.inputs.mfr_image || 'niicloudoperation/rdm-modular-file-renderer:latest' }}"
+          export MFR_IMAGE="${MFR_IMAGE:-${{ github.event.inputs.mfr_image || 'niicloudoperation/rdm-modular-file-renderer:latest' }}}"
           if [[ -n "$WB_IMAGE" ]]; then
             export WB_IMAGE
           else
@@ -1415,6 +1479,7 @@ jobs:
         skip_failed_test: true  # Continue on failure
         transition_timeout: 60000
         skip_preview_check: true
+        mfr_preview_enabled: ${{ matrix.test-group.mfr_preview_enabled == true }}
         skip_130mb_upload: ${{ matrix.test-group.skip_130mb_upload || false }}
         skip_default_storage: ${{ matrix.test-group.skip_default_storage || false }}
         skip_metadata: ${{ matrix.test-group.skip_metadata }}

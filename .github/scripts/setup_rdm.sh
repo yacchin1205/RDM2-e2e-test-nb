@@ -83,6 +83,10 @@ start_rdm_services() {
         export SERVICES="mfr wb fakecas sharejs wb_worker worker web api ember_osf_web"
     fi
 
+    if [ "${MFR_PREVIEW_ENABLED:-false}" = "true" ] && [ "${MFR_CELERY:-false}" != "true" ]; then
+        SERVICES="$SERVICES unoconv"
+    fi
+
     SERVICES="kaken_elasticsearch $SERVICES"
     
     if [ "${MINIO_ENABLED:-false}" = "true" ]; then
@@ -231,6 +235,10 @@ create_docker_override() {
     local cas_image="${CAS_IMAGE:-niicloudoperation/rdm-cas-overlay:latest}"
     local mfr_image="${MFR_IMAGE:-niicloudoperation/rdm-modular-file-renderer:latest}"
     local wb_image="${WB_IMAGE:-niicloudoperation/rdm-waterbutler:latest}"
+    local wb_volumes=""
+    if [ "${WB_CUSTOM:-false}" = "true" ]; then
+        wb_volumes='    volumes: ["osfstoragecache_vol:/code/website/osfstoragecache", "wb_tmp_vol:/tmp"]'
+    fi
     local elasticsearch_image="${ELASTICSEARCH_IMAGE:-elasticsearch:2}"
     local y_websocket_url="${Y_WEBSOCKET_URL:-}"
 
@@ -298,8 +306,10 @@ services:
     image: ${mfr_image}
   wb:
     image: ${wb_image}
+${wb_volumes}
   wb_worker:
     image: ${wb_image}
+${wb_volumes}
   wb_requirements:
     image: ${wb_image}
   kaken_elasticsearch:
@@ -348,6 +358,60 @@ EOL
         python3 "${script_dir}/weko_setup_cert.py" \
             "${PWD}/docker-compose.override.yml" \
             "${script_dir}/../../../weko/nginx/keys/server.crt"
+    fi
+
+    if [ "${MFR_CUSTOM:-false}" = "true" ] || [ "${MFR_CELERY:-false}" = "true" ]; then
+        # Do not mount the legacy Python dependencies over the image's packages.
+        sed -i.bak '/^  mfr:$/a\
+    volumes: !override ["wb_tmp_vol:/tmp"]
+' docker-compose.override.yml
+        rm docker-compose.override.yml.bak
+    fi
+
+    if [ "${WB_CUSTOM:-false}" = "true" ]; then
+        sed -i.bak '
+/^  wb:$/,/^  [^ ]/s/^    volumes:/    volumes: !override/
+/^  wb_worker:$/,/^  [^ ]/s/^    volumes:/    volumes: !override/
+' docker-compose.override.yml
+        rm docker-compose.override.yml.bak
+    fi
+
+    if [ "${MFR_CELERY:-false}" = "true" ]; then
+        cat >> .docker-compose.mfr.env << 'EOL'
+
+TASKS_CONFIG_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+TASKS_CONFIG_CELERY_RESULT_BACKEND=rpc://
+TASKS_CONFIG_WAIT_TIMEOUT=120
+UNOSERVER_EXTENSION_CONFIG_HOST=unoserver
+UNOSERVER_EXTENSION_CONFIG_PORT=2003
+EXTENSION_CONFIG_LOCAL_DEVELOPMENT=0
+EOL
+        sed -i.bak '/^  mfr:$/a\
+    depends_on: {mfr_worker: {condition: service_healthy}}
+' docker-compose.override.yml
+        rm docker-compose.override.yml.bak
+        cat >> docker-compose.override.yml << EOL
+  mfr_worker:
+    image: ${mfr_image}
+    command: invoke celery --hostname=mfr@%h --concurrency=2
+    env_file: .docker-compose.mfr.env
+    volumes: ["wb_tmp_vol:/tmp"]
+    depends_on:
+      rabbitmq: {condition: service_started}
+      unoserver: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A mfr.tasks.app:app inspect ping --destination=mfr@\$\$HOSTNAME --timeout=5"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+  unoserver:
+    image: ghcr.io/unoconv/unoserver-docker@sha256:7c2acae5f0c703534c7d253233b6f74d51fef47c4117e74f649914185197f6dd
+    healthcheck:
+      test: ["CMD", "python3", "-c", 'from xmlrpc.client import ServerProxy; ServerProxy("http://localhost:2003").info()']
+      interval: 10s
+      timeout: 10s
+      retries: 12
+EOL
     fi
 }
 
@@ -422,8 +486,12 @@ start_asset_services() {
 install_requirements() {
     echo "Installing requirements..."
     docker-compose run --rm requirements
-    docker-compose run --rm mfr_requirements
-    docker-compose run --rm wb_requirements
+    if [ "${MFR_CUSTOM:-false}" != "true" ] && [ "${MFR_CELERY:-false}" != "true" ]; then
+        docker-compose run --rm mfr_requirements
+    fi
+    if [ "${WB_CUSTOM:-false}" != "true" ]; then
+        docker-compose run --rm wb_requirements
+    fi
     echo "Requirements installation completed"
 }
 
