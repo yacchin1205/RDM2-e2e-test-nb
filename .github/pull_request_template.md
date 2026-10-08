@@ -13,7 +13,10 @@
 - OSF_IMAGE: 
 - EMBER_IMAGE: 
 - CAS_IMAGE: 
-- MFR_IMAGE: 
+- MFR_IMAGE:
+- MFR_REPOSITORY:
+- MFR_BRANCH:
+- MFR_CELERY:
 - WB_IMAGE:
 - EXCLUDE_NOTEBOOKS: 
 <!-- EXCLUDE_NOTEBOOKS: Comma-separated list of notebooks to exclude from tests -->
