@@ -498,6 +498,7 @@ jobs:
             wiki_enabled: false
     name: E2E ${{ matrix.test-group.display_name }}
     env:
+      WB_CUSTOM: ${{ needs.build-images.outputs.wb_custom }}
       MFR_CUSTOM: ${{ needs.build-images.outputs.mfr_custom }}
       MFR_CELERY: ${{ needs.build-images.outputs.mfr_celery }}
       MFR_PREVIEW_ENABLED: ${{ matrix.test-group.mfr_preview_enabled == true && 'true' || 'false' }}
@@ -780,6 +781,7 @@ jobs:
         export OSF_IMAGE="${{ matrix.test-group.migration_from.osf_image }}"
         export EMBER_IMAGE="${{ matrix.test-group.migration_from.ember_image }}"
         export CAS_IMAGE="${{ matrix.test-group.migration_from.cas_image }}"
+        export WB_CUSTOM=false
         export MFR_CUSTOM=false
         export MFR_CELERY=false
         export MFR_IMAGE="${{ matrix.test-group.migration_from.mfr_image }}"

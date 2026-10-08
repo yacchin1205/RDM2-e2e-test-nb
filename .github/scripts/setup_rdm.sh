@@ -235,6 +235,10 @@ create_docker_override() {
     local cas_image="${CAS_IMAGE:-niicloudoperation/rdm-cas-overlay:latest}"
     local mfr_image="${MFR_IMAGE:-niicloudoperation/rdm-modular-file-renderer:latest}"
     local wb_image="${WB_IMAGE:-niicloudoperation/rdm-waterbutler:latest}"
+    local wb_volumes=""
+    if [ "${WB_CUSTOM:-false}" = "true" ]; then
+        wb_volumes='    volumes: ["osfstoragecache_vol:/code/website/osfstoragecache", "wb_tmp_vol:/tmp"]'
+    fi
     local elasticsearch_image="${ELASTICSEARCH_IMAGE:-elasticsearch:2}"
     local y_websocket_url="${Y_WEBSOCKET_URL:-}"
 
@@ -302,8 +306,10 @@ services:
     image: ${mfr_image}
   wb:
     image: ${wb_image}
+${wb_volumes}
   wb_worker:
     image: ${wb_image}
+${wb_volumes}
   wb_requirements:
     image: ${wb_image}
   kaken_elasticsearch:
@@ -358,6 +364,14 @@ EOL
         # Do not mount the legacy Python dependencies over the image's packages.
         sed -i.bak '/^  mfr:$/a\
     volumes: !override ["wb_tmp_vol:/tmp"]
+' docker-compose.override.yml
+        rm docker-compose.override.yml.bak
+    fi
+
+    if [ "${WB_CUSTOM:-false}" = "true" ]; then
+        sed -i.bak '
+/^  wb:$/,/^  [^ ]/s/^    volumes:/    volumes: !override/
+/^  wb_worker:$/,/^  [^ ]/s/^    volumes:/    volumes: !override/
 ' docker-compose.override.yml
         rm docker-compose.override.yml.bak
     fi
@@ -475,7 +489,9 @@ install_requirements() {
     if [ "${MFR_CUSTOM:-false}" != "true" ] && [ "${MFR_CELERY:-false}" != "true" ]; then
         docker-compose run --rm mfr_requirements
     fi
-    docker-compose run --rm wb_requirements
+    if [ "${WB_CUSTOM:-false}" != "true" ]; then
+        docker-compose run --rm wb_requirements
+    fi
     echo "Requirements installation completed"
 }
 
