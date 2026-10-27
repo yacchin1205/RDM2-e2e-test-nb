@@ -597,7 +597,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: RCOSDP/weko
-        ref: develop_v2.0.0
+        ref: develop_v2.1.0
         path: weko
 
     - name: Checkout Flowable gateway repository
