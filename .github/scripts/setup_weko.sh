@@ -100,20 +100,6 @@ case "$COMMAND" in
       docker compose -f "${compose_file}" exec -T web invenio shell /code/scripts/demo/ams/update_search_management.py
     fi
 
-    # Update SWORD mapping for item type 30002
-    echo "=== Updating SWORD Mapping 30002 ==="
-    mapping_json=$(cat "${SCRIPT_DIR}/../patches/sword_mapping_30002.json")
-    docker compose -f "${compose_file}" exec -T web invenio shell -c "
-from weko_records.api import JsonldMapping
-import json
-mapping = json.loads('''${mapping_json}''')
-obj = JsonldMapping.get_mapping_by_id(30002)
-obj.mapping = mapping
-from invenio_db import db
-db.session.commit()
-print('Updated mapping 30002')
-"
-
     if [[ "${MIBYO_DB_ENABLED:-false}" == "true" ]]; then
       # Insert/Update SWORD mapping for item type 51000
       echo "=== Updating SWORD Mapping 51000 ==="
