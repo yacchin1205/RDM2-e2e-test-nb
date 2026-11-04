@@ -137,15 +137,19 @@ from invenio_db import db
 index = Index.query.filter_by(index_name_english="Sample Index").first()
 if not index:
     raise Exception("Sample Index not found")
-print(f"Before: contribute_role={index.contribute_role}, browsing_role={index.browsing_role}, public_state={index.public_state}")
+print(f"Before: contribute_role={index.contribute_role}, browsing_role={index.browsing_role}, contribute_group={index.contribute_group}, browsing_group={index.browsing_group}, public_state={index.public_state}")
 index.contribute_role = "1,2,3,4,-98,-99"
 index.browsing_role = "1,2,3,4,-98,-99"
+# WEKO 2.1 also requires a matching group, and an index without groups is hidden
+# from every non-admin user; "-89" is the group WEKO assigns to users with no group.
+index.contribute_group = "-89"
+index.browsing_group = "-89"
 index.public_state = True
 db.session.commit()
 # Clear Redis cache so API returns fresh data
 for lang in ["en", "ja"]:
     delete_index_trees_from_redis(lang)
-print(f"After: contribute_role={index.contribute_role}, browsing_role={index.browsing_role}, public_state={index.public_state}")
+print(f"After: contribute_role={index.contribute_role}, browsing_role={index.browsing_role}, contribute_group={index.contribute_group}, browsing_group={index.browsing_group}, public_state={index.public_state}")
 '
 
     # Grant index-tree-access permission to Contributor role
