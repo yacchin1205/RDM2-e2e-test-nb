@@ -166,6 +166,23 @@ else:
     print(f"Granted index-tree-access to Contributor (role_id={role.id})")
 '
 
+    # scripts/demo/item_type.sql predates the W2025-29 migration, so its item types
+    # do not match mapping 30002 until the migration updates properties and item types.
+    echo "=== Applying W2025-29 Migration ==="
+    docker compose -f "${compose_file}" exec -T -w /code web invenio shell scripts/demo/update_W2025-29.py 30015
+
+    # Workaround until WEKO fixes the missing dot in the contributor affiliation name paths.
+    echo "=== Fixing Contributor Affiliation Paths in SWORD Mapping 30002 ==="
+    fixed_id=$(docker compose -f "${compose_file}" exec -T postgresql psql -U invenio -d invenio -v ON_ERROR_STOP=1 -q -t -A -c "
+UPDATE jsonld_mappings
+SET mapping = replace(mapping::text, 'jpcoar:affiliationjpcoar:affiliationName', 'jpcoar:affiliation.jpcoar:affiliationName')::jsonb
+WHERE id = 30002 AND mapping::text LIKE '%jpcoar:affiliationjpcoar:affiliationName%'
+RETURNING id;")
+    if [[ "${fixed_id}" != "30002" ]]; then
+      echo "Missing dot not found in SWORD mapping 30002; remove this workaround" >&2
+      exit 1
+    fi
+
     # Validate SWORD mapping 30002
     echo "=== SWORD Mapping Validation (30002) ==="
     validation_result=$(docker compose -f "${compose_file}" exec -T web invenio shell -c '
