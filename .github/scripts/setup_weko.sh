@@ -100,20 +100,6 @@ case "$COMMAND" in
       docker compose -f "${compose_file}" exec -T web invenio shell /code/scripts/demo/ams/update_search_management.py
     fi
 
-    # Update SWORD mapping for item type 30002
-    echo "=== Updating SWORD Mapping 30002 ==="
-    mapping_json=$(cat "${SCRIPT_DIR}/../patches/sword_mapping_30002.json")
-    docker compose -f "${compose_file}" exec -T web invenio shell -c "
-from weko_records.api import JsonldMapping
-import json
-mapping = json.loads('''${mapping_json}''')
-obj = JsonldMapping.get_mapping_by_id(30002)
-obj.mapping = mapping
-from invenio_db import db
-db.session.commit()
-print('Updated mapping 30002')
-"
-
     if [[ "${MIBYO_DB_ENABLED:-false}" == "true" ]]; then
       # Insert/Update SWORD mapping for item type 51000
       echo "=== Updating SWORD Mapping 51000 ==="
@@ -151,15 +137,19 @@ from invenio_db import db
 index = Index.query.filter_by(index_name_english="Sample Index").first()
 if not index:
     raise Exception("Sample Index not found")
-print(f"Before: contribute_role={index.contribute_role}, browsing_role={index.browsing_role}, public_state={index.public_state}")
+print(f"Before: contribute_role={index.contribute_role}, browsing_role={index.browsing_role}, contribute_group={index.contribute_group}, browsing_group={index.browsing_group}, public_state={index.public_state}")
 index.contribute_role = "1,2,3,4,-98,-99"
 index.browsing_role = "1,2,3,4,-98,-99"
+# WEKO 2.1 also requires a matching group, and an index without groups is hidden
+# from every non-admin user; "-89" is the group WEKO assigns to users with no group.
+index.contribute_group = "-89"
+index.browsing_group = "-89"
 index.public_state = True
 db.session.commit()
 # Clear Redis cache so API returns fresh data
 for lang in ["en", "ja"]:
     delete_index_trees_from_redis(lang)
-print(f"After: contribute_role={index.contribute_role}, browsing_role={index.browsing_role}, public_state={index.public_state}")
+print(f"After: contribute_role={index.contribute_role}, browsing_role={index.browsing_role}, contribute_group={index.contribute_group}, browsing_group={index.browsing_group}, public_state={index.public_state}")
 '
 
     # Grant index-tree-access permission to Contributor role
@@ -179,6 +169,23 @@ else:
     db.session.commit()
     print(f"Granted index-tree-access to Contributor (role_id={role.id})")
 '
+
+    # scripts/demo/item_type.sql predates the W2025-29 migration, so its item types
+    # do not match mapping 30002 until the migration updates properties and item types.
+    echo "=== Applying W2025-29 Migration ==="
+    docker compose -f "${compose_file}" exec -T -w /code web invenio shell scripts/demo/update_W2025-29.py 30015
+
+    # Workaround until WEKO fixes the missing dot in the contributor affiliation name paths.
+    echo "=== Fixing Contributor Affiliation Paths in SWORD Mapping 30002 ==="
+    fixed_id=$(docker compose -f "${compose_file}" exec -T postgresql psql -U invenio -d invenio -v ON_ERROR_STOP=1 -q -t -A -c "
+UPDATE jsonld_mappings
+SET mapping = replace(mapping::text, 'jpcoar:affiliationjpcoar:affiliationName', 'jpcoar:affiliation.jpcoar:affiliationName')::jsonb
+WHERE id = 30002 AND mapping::text LIKE '%jpcoar:affiliationjpcoar:affiliationName%'
+RETURNING id;")
+    if [[ "${fixed_id}" != "30002" ]]; then
+      echo "Missing dot not found in SWORD mapping 30002; remove this workaround" >&2
+      exit 1
+    fi
 
     # Validate SWORD mapping 30002
     echo "=== SWORD Mapping Validation (30002) ==="
