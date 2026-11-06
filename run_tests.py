@@ -47,6 +47,11 @@ class TestRunner:
         self.skip_login = False
         self.enable_1gb_file_upload = False
         self.skip_autofill = False
+        self.binderhub_enabled = False
+        self.binderhub_binderhub_url = None
+        self.jupyterhub_username = None
+        self.jupyterhub_password = None
+        self.binderhub_launch_timeout = 30 * 60 * 1000
         self.jupyterhub_enabled = False
         self.tljh_url = None
         self.tljh_username = None
@@ -101,6 +106,25 @@ class TestRunner:
         self.idp_name_project_limit_2 = None
         self.idp_username_project_limit_2 = None
         self.idp_password_project_limit_2 = None
+        
+        # Mapcore group test parameters
+        self.idp_username_3 = None
+        self.idp_password_3 = None
+        self.idp_username_4 = None
+        self.idp_password_4 = None
+        self.idp_username_5 = None
+        self.idp_password_5 = None
+        self.display_username_institutional_admin = None
+        self.display_username_1 = None
+        self.display_username_2 = None
+        self.display_username_3 = None
+        self.group_a = None
+        self.group_b = None
+        self.group_c = None
+        self.group_d = None
+        self.group_search = None
+        self.group_note_text = None
+        self.mapcore_group_enabled = False
 
         # Exclude notebooks
         self.exclude_notebooks = []
@@ -480,6 +504,23 @@ class TestRunner:
             )
         )
 
+    def run_binderhub_tests(self):
+        """Run the same OAuth BinderHub notebooks used for interactive acceptance tests."""
+        if not self.binderhub_enabled:
+            return
+        if not all((self.binderhub_binderhub_url, self.jupyterhub_username, self.jupyterhub_password)):
+            raise ValueError('BinderHub URL, JupyterHub username and password are required')
+        self.result_notebooks.append(self.run_notebook(
+            '取りまとめ-BinderHub-BinderHubアドオン.ipynb',
+            binderhub_binderhub_url=self.binderhub_binderhub_url,
+            binderhub_auth_mode='jupyterhub',
+            jupyterhub_username=self.jupyterhub_username,
+            jupyterhub_password=self.jupyterhub_password,
+            binderhub_launch_timeout=self.binderhub_launch_timeout,
+            skip_failed_test=self.skip_failed_test,
+            exclude_notebooks=self.exclude_notebooks,
+        ))
+
     def run_weko_tests(self):
         """Run WEKO addon tests."""
         print('\n=== WEKO Tests ===')
@@ -631,6 +672,45 @@ class TestRunner:
         )
             
 
+    def run_mapcore_group_tests(self):
+        """Run Mapcore group tests."""
+        print('\n=== Mapcore group Tests ===')
+
+        if not self.mapcore_group_enabled:
+            print('Skipping Mapcore group tests (mapcore_group_enabled=false)')
+            return
+
+        self.result_notebooks.append(
+            self.run_notebook(
+                '取りまとめ-グループ.ipynb',
+                admin_rdm_url=self.admin_rdm_url,
+                idp_username_institutional_admin=self.idp_username_institutional_admin,
+                idp_password_institutional_admin=self.idp_password_institutional_admin,
+                idp_username_1=self.idp_username_1,
+                idp_password_1=self.idp_password_1,
+                idp_username_2=self.idp_username_2,
+                idp_password_2=self.idp_password_2,
+                idp_username_3=self.idp_username_3,
+                idp_password_3=self.idp_password_3,
+                idp_username_4=self.idp_username_4,
+                idp_password_4=self.idp_password_4,
+                idp_username_5=self.idp_username_5,
+                idp_password_5=self.idp_password_5,
+                display_username_institutional_admin=self.display_username_institutional_admin,
+                display_username_1=self.display_username_1,
+                display_username_2=self.display_username_2,
+                display_username_3=self.display_username_3,
+                group_a=self.group_a,
+                group_b=self.group_b,
+                group_c=self.group_c,
+                group_d=self.group_d,
+                group_search=self.group_search,
+                group_note_text=self.group_note_text,
+                skip_failed_test=self.skip_failed_test,
+                exclude_notebooks=self.exclude_notebooks,
+            )
+        )
+
     def check_notebook_errors(self, notebook_path):
         """Check a notebook and all its sub-notebooks recursively for execution errors."""
         all_errors = []
@@ -732,9 +812,11 @@ class TestRunner:
         self.run_admin_tests()
         self.run_project_limit_tests()
         self.run_jupyterhub_tests()
+        self.run_binderhub_tests()
         self.run_weko_tests()
         self.run_mibyo_db_tests()
         self.run_workflow_tests()
+        self.run_mapcore_group_tests()
         self.run_wiki_tests()
 
         result_notebooks = [result_notebook for result_notebook in self.result_notebooks if result_notebook is not None]
