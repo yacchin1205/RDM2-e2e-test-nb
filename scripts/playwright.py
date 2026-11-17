@@ -217,7 +217,7 @@ async def _finish_pw_context(screenshot=False, last_path=None):
             timeout_on_screenshot = True
     if timeout_on_screenshot:
         return
-    current_contexts = current_contexts[::-1]
+    current_contexts = current_contexts[:-1]
     await current_context.close()
     for i, current_page in enumerate(current_pages):
         index = i + 1
@@ -244,10 +244,10 @@ async def _finish_pw_context(screenshot=False, last_path=None):
         for msg in console_messages:
             f.write(f"{msg['timestamp']:.3f} {msg['url']} [{msg['type']}] {msg['text']}\n")
     print(f'Console: {console_log_path}')
-    shutil.rmtree(temp_dir)
     for page in current_pages:
         await page.close()
     if len(current_contexts) == 0:
+        shutil.rmtree(temp_dir)
         return
     await _finish_pw_context(screenshot=False, last_path=last_path)
 
