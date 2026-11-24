@@ -1330,8 +1330,8 @@ jobs:
       if: env.BINDERHUB_ENABLED == 'true'
       working-directory: e2e-tests
       env:
-        BINDERHUB_IMAGE: ${{ env.BINDERHUB_IMAGE_OVERRIDE || github.event.inputs.binderhub_image || 'gcr.io/nii-ap-ops/k8s-binderhub-binderhub:0.2.5-20261111' }}
-        JUPYTERHUB_IMAGE: ${{ env.BINDERHUB_JUPYTERHUB_IMAGE_OVERRIDE || github.event.inputs.binderhub_jupyterhub_image || 'gcr.io/nii-ap-ops/k8s-hub:4.1.0-20261106' }}
+        BINDERHUB_IMAGE: ${{ env.BINDERHUB_IMAGE_OVERRIDE || github.event.inputs.binderhub_image || 'docker.io/yacchin1205/cs-k8s-binderhub:bh-4cc9a06c' }}
+        JUPYTERHUB_IMAGE: ${{ env.BINDERHUB_JUPYTERHUB_IMAGE_OVERRIDE || github.event.inputs.binderhub_jupyterhub_image || 'docker.io/yacchin1205/cs-k8s-binderhub:jh-5.5.5-c0051ca4' }}
       run: .github/scripts/setup_binderhub.sh install
 
     - name: Install TLJH stack
