@@ -84,14 +84,15 @@ PY
 
     for service in web api worker wb wb_worker; do
         container=$(docker-compose ps -q "$service")
-        docker cp "${STATE_DIR}/server.crt" "${container}:/tmp/s3-minio-ca.crt"
+        docker cp "${STATE_DIR}/server.crt" "${container}:/usr/local/share/ca-certificates/s3-minio.crt"
+        docker-compose exec -T "$service" update-ca-certificates
         docker-compose exec -T "$service" python3 - <<'PY'
 import ssl
 from pathlib import Path
 import botocore
 import certifi
 
-certificate = Path('/tmp/s3-minio-ca.crt').read_bytes()
+certificate = Path('/usr/local/share/ca-certificates/s3-minio.crt').read_bytes()
 bundles = {Path(certifi.where()), Path(ssl.get_default_verify_paths().openssl_cafile),
            Path(botocore.__file__).parent / 'cacert.pem'}
 for bundle in bundles:
@@ -101,6 +102,17 @@ for bundle in bundles:
 PY
     done
     docker-compose restart web api worker wb wb_worker
+    docker-compose exec -T wb python3 - <<'PY'
+import asyncio
+import aiohttp
+
+async def check_tls():
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://s3.amazonaws.com/minio/health/ready') as response:
+            response.raise_for_status()
+
+asyncio.get_event_loop().run_until_complete(check_tls())
+PY
     sudo apt-get install -y libnss3-tools
     mkdir -p "$HOME/.pki/nssdb"
     if [[ ! -f "$HOME/.pki/nssdb/cert9.db" ]]; then
