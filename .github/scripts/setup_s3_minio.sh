@@ -1,0 +1,118 @@
+#!/bin/bash
+set -euo pipefail
+
+COMMAND=${1:?Usage: setup_s3_minio.sh <prepare|install> <RDM directory>}
+RDM_ROOT=$(realpath "${2:?RDM directory is required}")
+STATE_DIR="${RDM_ROOT}/.s3-minio"
+DOMAINS=(s3.amazonaws.com s3.us-east-1.amazonaws.com s3-us-east-1.amazonaws.com)
+HOSTS=("${DOMAINS[@]}")
+for domain in "${DOMAINS[@]}"; do
+    HOSTS+=("s3-e2e-a.${domain}" "s3-e2e-b.${domain}")
+done
+
+case "$COMMAND" in
+  prepare)
+    mkdir -p "$STATE_DIR"
+    san=$(printf 'DNS:%s,' "${HOSTS[@]}")
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3 \
+        -keyout "${STATE_DIR}/server.key" -out "${STATE_DIR}/server.crt" \
+        -subj '/CN=s3.amazonaws.com' \
+        -addext "subjectAltName=${san%,}" \
+        -addext 'basicConstraints=critical,CA:TRUE'
+
+    cat > "${STATE_DIR}/nginx.conf" <<'NGINX'
+events {}
+http {
+    map "$http_authorization $request_uri" $s3_signature {
+        default none;
+        ~AWS4-HMAC-SHA256 v4;
+        ~AWSAccessKeyId= v2;
+        ~^AWS\s v2;
+    }
+    log_format s3 '$request_method $host $uri $status signature=$s3_signature';
+    access_log /dev/stdout s3;
+    server {
+        listen 443 ssl;
+        ssl_certificate /certs/server.crt;
+        ssl_certificate_key /certs/server.key;
+        client_max_body_size 0;
+        location / {
+            proxy_pass http://minio:9000;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_http_version 1.1;
+            proxy_request_buffering off;
+            proxy_buffering off;
+        }
+    }
+}
+NGINX
+
+    python3 - "$RDM_ROOT" <<'PY'
+import json
+import sys
+from pathlib import Path
+import yaml
+
+root = Path(sys.argv[1])
+compose = root / 'docker-compose.override.yml'
+data = yaml.safe_load(compose.read_text())
+data['services']['minio']['environment']['MINIO_DOMAIN'] = (
+    's3.amazonaws.com,s3.us-east-1.amazonaws.com,s3-us-east-1.amazonaws.com'
+)
+compose.write_text(yaml.safe_dump(data))
+
+# This fixture exercises signing and file operations without an external KMS.
+settings = root / 'addons/s3/static/settings.json'
+data = json.loads(settings.read_text())
+data['encryptUploads'] = False
+settings.write_text(json.dumps(data, indent=4) + '\n')
+PY
+    ;;
+  install)
+    cd "$RDM_ROOT"
+    network=$(docker inspect "$(docker-compose ps -q minio)" \
+        --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}')
+    aliases=()
+    for host in "${HOSTS[@]}"; do
+        aliases+=(--network-alias "$host")
+    done
+    docker run -d --name s3-minio-proxy --network "$network" "${aliases[@]}" \
+        -p 127.0.0.1:443:443 -v "${STATE_DIR}:/certs:ro" \
+        -v "${STATE_DIR}/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:alpine
+    printf '127.0.0.1 %s\n' "${HOSTS[*]}" | sudo tee -a /etc/hosts
+
+    for service in web api worker wb wb_worker; do
+        container=$(docker-compose ps -q "$service")
+        docker cp "${STATE_DIR}/server.crt" "${container}:/tmp/s3-minio-ca.crt"
+        docker-compose exec -T "$service" python3 - <<'PY'
+import ssl
+from pathlib import Path
+import botocore
+import certifi
+
+certificate = Path('/tmp/s3-minio-ca.crt').read_bytes()
+bundles = {Path(certifi.where()), Path(ssl.get_default_verify_paths().openssl_cafile),
+           Path(botocore.__file__).parent / 'cacert.pem'}
+for bundle in bundles:
+    if bundle.exists():
+        with bundle.open('ab') as stream:
+            stream.write(b'\n' + certificate)
+PY
+    done
+    docker-compose restart web api worker wb wb_worker
+    sudo apt-get install -y libnss3-tools
+    mkdir -p "$HOME/.pki/nssdb"
+    if [[ ! -f "$HOME/.pki/nssdb/cert9.db" ]]; then
+        certutil -N -d "sql:$HOME/.pki/nssdb" --empty-password
+    fi
+    certutil -A -d "sql:$HOME/.pki/nssdb" -n s3-minio-e2e -t 'C,,' \
+        -i "${STATE_DIR}/server.crt"
+    curl --fail --cacert "${STATE_DIR}/server.crt" \
+        https://s3.amazonaws.com/minio/health/ready
+    ;;
+  *)
+    echo "Unknown command: $COMMAND" >&2
+    exit 1
+    ;;
+esac
