@@ -191,6 +191,7 @@ jobs:
             skip_autofill: true
             skip_default_storage: true
             skip_login: true
+            skip_130mb_upload: true
             minio_enabled: true
             s3_minio_enabled: true
             member_display_enabled: false
@@ -1351,7 +1352,7 @@ jobs:
     - name: Collect Amazon S3 proxy log
       if: always() && env.S3_MINIO_ENABLED == 'true'
       working-directory: RDM-osf.io
-      run: docker-compose logs --no-color s3-minio-proxy > ../e2e-tests/s3-minio-proxy.log
+      run: docker-compose logs --no-color --no-log-prefix s3-minio-proxy > ../e2e-tests/s3-minio-proxy.log
 
     - name: Verify Amazon S3 requests use SigV4
       if: always() && env.S3_MINIO_ENABLED == 'true'
@@ -1361,7 +1362,7 @@ jobs:
         lines = Path('e2e-tests/s3-minio-proxy.log').read_text().splitlines()
         assert any(line.endswith('signature=v4') for line in lines), 'No SigV4 requests reached MinIO'
         assert not any(line.endswith('signature=v2') for line in lines), 'S3 requests used Signature V2'
-        assert any(line.startswith('POST ') and line.endswith(' 200 operation=complete-multipart signature=v4')
+        assert any(line.startswith('POST ') and line.endswith('/multipart-check.bin 200 operation=complete-multipart signature=v4')
                    for line in lines), 'No successful SigV4 multipart completion reached MinIO'
         PYTHON
 

@@ -62,6 +62,7 @@ if [[ "${S3_MINIO}" == "true" ]]; then
 storages_s3:
   - id: 's3'
     name: 'Amazon S3'
+    check_multipart_upload: true
 
 s3_access_key_1: '${S3COMPAT_ACCESS_KEY_1}'
 s3_secret_access_key_1: '${S3COMPAT_SECRET_KEY_1}'
