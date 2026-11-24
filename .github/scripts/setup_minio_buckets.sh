@@ -54,6 +54,7 @@ mc mb "${ALIAS}/${BUCKET_NAME_1}"
 mc mb "${ALIAS}/${BUCKET_NAME_2}"
 
 if [ "${S3_MINIO_ENABLED:-false}" = "true" ]; then
+  mc version enable "${ALIAS}/${BUCKET_NAME_2}"
   mkdir /tmp/s3-pagination
   for number in \$(seq 1 1500); do
     touch "/tmp/s3-pagination/\$(printf '%04d' "\$number")"

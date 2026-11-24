@@ -512,6 +512,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install --no-cache-dir -r requirements.txt
         pip install --no-cache-dir papermill
+        if [ "${S3_MINIO_ENABLED}" = "true" ]; then
+          pip install --no-cache-dir boto3
+        fi
         
         # Clear pip cache if any remains
         pip cache purge || true
@@ -1220,6 +1223,7 @@ jobs:
 
         args=(ci.config.yaml base_ci.config.yaml)
         if [ "${S3_MINIO_ENABLED}" = "true" ]; then
+          export S3_MINIO_CA_BUNDLE="${GITHUB_WORKSPACE}/RDM-osf.io/.s3-minio/server.crt"
           args+=(--s3-minio)
         elif [ "${MINIO_ENABLED}" = "true" ]; then
           args+=(--minio)
