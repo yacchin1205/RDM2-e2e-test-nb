@@ -1,6 +1,7 @@
 services:
   hub:
-    build: .
+    # Built by setup_binderhub.sh install on top of BINDERHUB_IMAGE
+    image: rdm-e2e-binderhub
     network_mode: host
     environment:
       OAUTHLIB_INSECURE_TRANSPORT: '1'

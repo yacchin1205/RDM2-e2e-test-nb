@@ -20,7 +20,8 @@ case "$COMMAND" in
     fi
     sudo mount --make-rshared "$mount_root"
     docker pull gcr.io/nii-ap-ops/rdmfs:2026.02.1
-    docker compose -f "${STACK_ROOT}/compose.yaml" up --build -d
+    docker build --build-arg BINDERHUB_IMAGE="${BINDERHUB_IMAGE:?Set BINDERHUB_IMAGE to a BinderHub image}" -t rdm-e2e-binderhub "$STACK_ROOT"
+    docker compose -f "${STACK_ROOT}/compose.yaml" up -d
     # Fail during setup if the builder cannot reach the host Docker daemon.
     docker compose -f "${STACK_ROOT}/compose.yaml" exec -T hub docker version
     for attempt in $(seq 1 90); do
