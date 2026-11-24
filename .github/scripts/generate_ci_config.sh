@@ -63,7 +63,7 @@ storages_s3:
   - id: 's3'
     name: 'Amazon S3'
     check_multipart_upload: true
-    version_verification_ca_bundle: '${S3_MINIO_CA_BUNDLE}'
+    s3_verification_ca_bundle: '${S3_MINIO_CA_BUNDLE}'
 
 s3_access_key_1: '${S3COMPAT_ACCESS_KEY_1}'
 s3_secret_access_key_1: '${S3COMPAT_SECRET_KEY_1}'
