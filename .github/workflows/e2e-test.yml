@@ -112,18 +112,33 @@ jobs:
       fail-fast: false
       matrix:
         test-group:
-          - name: user-metadata-mibyo-db
-            display_name: "User Tests (Mibyo DB)"
+          - name: user-weko-direct
+            display_name: "User Tests (WEKO Direct)"
             include_admin: true
             skip_admin: true
             skip_metadata: true
-            skip_autofill: true
             skip_default_storage: true
             skip_login: true
             skip_130mb_upload: true
             minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: true
+            weko_enabled: true
+            weko_test_mode: direct
+            mibyo_db_enabled: false
+            jupyterhub_enabled: false
+            flowable_enabled: false
+            wiki_enabled: false
+          - name: user-weko-workflow
+            display_name: "User Tests (WEKO Workflow)"
+            include_admin: true
+            skip_admin: true
+            skip_metadata: true
+            skip_default_storage: true
+            skip_login: true
+            skip_130mb_upload: true
+            minio_enabled: false
+            weko_enabled: true
+            weko_test_mode: workflow
+            mibyo_db_enabled: false
             jupyterhub_enabled: false
             flowable_enabled: false
             wiki_enabled: false
