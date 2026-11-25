@@ -51,6 +51,8 @@ def mapped(field, source, prefix=''):
             if entry:
                 result.append(entry)
         else:
+            if field['key'] == 'resourceuri' and isinstance(value, str) and value.startswith('http://purl.org/coar/resource_type/'):
+                value = value.rstrip('/')
             result.append(value)
     if result:
         return result if field['many'] else result[0]
