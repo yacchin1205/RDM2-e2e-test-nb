@@ -235,7 +235,9 @@ def deposit(key=None):
     if review:
         activities.update(dict.fromkeys(pending, False))
     state = 'inWorkflow' if review else 'ingested'
-    return jsonify({'@id': request.url_root + 'sword/deposit/' + str(identifier),
+    return jsonify({'@context': 'https://swordapp.github.io/swordv3/swordv3.jsonld',
+                    '@type': 'ServiceDocument' if review else 'Status',
+                    '@id': request.url_root + 'sword/deposit/' + str(identifier),
                     'state': [{'@id': 'http://purl.org/net/sword/3.0/state/' + state}], 'links': links}), 201
 
 
