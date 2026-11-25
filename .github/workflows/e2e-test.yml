@@ -121,7 +121,7 @@ on:
           - 'false'
 
 env:
-  BINDERHUB_DEFAULT_IMAGE: docker.io/yacchin1205/cs-k8s-binderhub:bh-8b45bc5d
+  BINDERHUB_DEFAULT_IMAGE: docker.io/yacchin1205/cs-k8s-binderhub:bh-34e51beb
   BINDERHUB_DEFAULT_JUPYTERHUB_IMAGE: docker.io/yacchin1205/cs-k8s-binderhub:jh-5.5.5-c0051ca4
 
 jobs:
