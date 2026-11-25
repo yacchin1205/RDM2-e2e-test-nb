@@ -1373,7 +1373,7 @@ jobs:
     - name: Verify multipart upload completion uses SigV4
       if: always() && env.S3_MINIO_ENABLED == 'true' && env.S3_MINIO_INST_ENABLED != 'true'
       run: |
-        rg '^POST .+/multipart-check\.bin 200 operation=complete-multipart signature=v4$' e2e-tests/s3-minio-proxy.log
+        grep -E '^POST .+/multipart-check\.bin 200 operation=complete-multipart signature=v4$' e2e-tests/s3-minio-proxy.log
 
     - name: Upload Amazon S3 proxy log
       if: always() && env.S3_MINIO_ENABLED == 'true'
