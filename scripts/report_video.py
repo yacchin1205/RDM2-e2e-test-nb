@@ -24,6 +24,8 @@ INIT_SCRIPT = '''(() => {
   root.append(canvas);
   let explicitlySet = false;
   const setQR = (bars) => {
+    if (!document.documentElement) return false;
+    if (bars && host.parentNode !== document.documentElement) document.documentElement.append(host);
     host.style.display = bars ? 'block' : 'none';
     if (bars) {
       canvas.width = bars.length;
@@ -37,11 +39,10 @@ INIT_SCRIPT = '''(() => {
     }
     return true;
   };
-  const mount = () => document.documentElement.append(host);
-  if (document.documentElement) mount();
-  else document.addEventListener('DOMContentLoaded', mount, {once:true});
   window.__setReportQR = (bars) => { explicitlySet = true; return setQR(bars); };
-  window.__readReportQR().then(bars => { if (!explicitlySet) return setQR(bars); });
+  const restore = () => window.__readReportQR().then(bars => { if (!explicitlySet) setQR(bars); });
+  if (document.documentElement) restore();
+  else document.addEventListener('DOMContentLoaded', restore, {once:true});
 })();'''
 
 
