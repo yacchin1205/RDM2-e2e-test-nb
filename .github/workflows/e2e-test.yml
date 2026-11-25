@@ -497,7 +497,7 @@ jobs:
         repository: RCOSDP/RDM-flowable-gateway
         path: RDM-flowable-gateway
 
-    - name: Prepare WEKO test service
+    - name: Prepare FakeWEKO
       if: env.WEKO_ENABLED == 'true' || env.MIBYO_DB_ENABLED == 'true'
       run: |
         for role in ADMIN USER; do
@@ -505,7 +505,7 @@ jobs:
           echo "::add-mask::$password"
           echo "WEKO_${role}_PASSWORD=$password" >> "$GITHUB_ENV"
         done
-        cp -r e2e-tests/docker/weko-test weko
+        cp -r e2e-tests/docker/fakeweko weko
         mkdir -p weko/nginx/keys
         openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
           -keyout weko/nginx/keys/server.key -out weko/nginx/keys/server.crt \
@@ -1162,7 +1162,7 @@ jobs:
         export INCLUDE_ADMIN=${{ matrix.test-group.include_admin }}
         test_rdm_endpoints
 
-    - name: Install WEKO stack
+    - name: Start FakeWEKO
       if: env.WEKO_ENABLED == 'true' || env.MIBYO_DB_ENABLED == 'true'
       working-directory: e2e-tests
       run: |

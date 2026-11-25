@@ -1,4 +1,4 @@
-"""HTTPS peer for the RDM JAIRO Cloud integration notebooks."""
+"""FakeWEKO serves the RDM JAIRO Cloud integration notebooks over HTTPS."""
 import os
 import secrets
 from functools import wraps
@@ -53,7 +53,7 @@ def administrator(view):
 @app.get('/')
 def home():
     return render_template_string("""
-    <title>WEKO test service</title><h1>WEKO test service</h1>
+    <title>FakeWEKO</title><h1>FakeWEKO</h1>
     {% if session.email %}
       <a href="/account/settings/profile/"><i class="fa fa-user"></i>Profile</a>
       <div class="navbar-form"><button class="dropdown-toggle" onclick="this.nextElementSibling.hidden=false">{{session.email}}</button>
@@ -243,7 +243,7 @@ def item_page(key):
         abort(404)
     related = [records[i] for i in record['related'] if i in records and records[i]['public']]
     return render_template_string("""
-      <aside id="test-notice">WEKO test service
+      <aside id="test-notice">FakeWEKO
         <button onclick="sessionStorage.setItem('wekoNotice','accepted');this.parentElement.hidden=true">That's ok</button></aside>
       <script>document.getElementById('test-notice').hidden = !!sessionStorage.getItem('wekoNotice')</script>
       <a href="/workflow/">WorkFlow</a><h1>{{record.metadata.title|join(' / ')}}</h1><p id="public_status_form">Public</p>
