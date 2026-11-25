@@ -555,7 +555,6 @@ class TestRunner:
                 weko_admin_email=self.weko_admin_email,
                 weko_admin_password=self.weko_admin_password,
                 weko_index_name=self.weko_index_name,
-                weko_index_name_ja=self.weko_index_name_ja,
                 weko_docker_compose_path=self.weko_docker_compose_path,
                 sword_mapping_id=self.mibyo_db_sword_mapping_id,
                 ignore_https_errors=self.ignore_https_errors,
