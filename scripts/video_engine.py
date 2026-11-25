@@ -64,4 +64,8 @@ def execute_notebook(base_notebook, result_notebook, parameters):
         finally:
             manifest = directory / 'recording.json'
             if manifest.exists() and json.loads(manifest.read_text())['segments']:
+                if 'eRad' in str(output):
+                    (output.parent / 'recording.json').write_bytes(manifest.read_bytes())
                 render(directory, '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc').replace(output)
+                if 'eRad' in str(output):
+                    (output.parent / 'video-index.json').write_bytes((directory / 'video-index.json').read_bytes())
