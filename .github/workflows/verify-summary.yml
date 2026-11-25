@@ -34,10 +34,14 @@ jobs:
       id: excel-upload
 
     - name: Download the published summary
-      uses: actions/download-artifact@v4
-      with:
-        name: test-summary-excel-user-workflow-forms
-        path: summary
+      env:
+        GH_TOKEN: ${{ github.token }}
+        ARTIFACT_ID: ${{ steps.excel-upload.outputs.artifact-id }}
+      run: |
+        curl --fail --location --retry 5 --retry-all-errors \
+          --header "Authorization: Bearer $GH_TOKEN" \
+          "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" -o summary.zip
+        unzip -q summary.zip -d summary
     - name: Compare paths and checksums with the E2E results
       run: |
         python3 - <<'PYTHON'
