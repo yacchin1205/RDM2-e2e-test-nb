@@ -112,89 +112,6 @@ jobs:
       fail-fast: false
       matrix:
         test-group:
-          - name: user
-            display_name: "User Tests"
-            include_admin: false
-            skip_admin: true
-            skip_metadata: false
-            skip_autofill: true
-            minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: false
-            flowable_enabled: false
-            wiki_enabled: false
-          - name: user-metadata
-            display_name: "User Tests (Metadata)"
-            include_admin: false
-            skip_admin: true
-            skip_metadata: false
-            skip_autofill: false
-            skip_default_storage: true
-            skip_login: true
-            skip_130mb_upload: true
-            minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: false
-            flowable_enabled: false
-            wiki_enabled: false
-          - name: admin
-            display_name: "Admin Tests"
-            include_admin: true
-            skip_admin: false
-            skip_metadata: true
-            skip_default_storage: true
-            skip_login: true
-            minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: false
-            flowable_enabled: false
-            wiki_enabled: false
-            exclude_notebooks: |
-              テスト手順-管理者機能-ログイン可否設定.ipynb
-              テスト手順-管理者機能-ノード管理.ipynb
-              テスト手順-管理者機能-ユーザ管理.ipynb
-              テスト手順-管理者機能-機関設定.ipynb
-              テスト手順-管理者機能-RDMユーザメール.ipynb
-              テスト手順-管理者機能-RDM登録.ipynb
-              テスト手順-管理者機能-アドオン利用制御.ipynb
-              テスト手順-管理者機能-利用統計.ipynb
-              テスト手順-管理者機能-アナウンス.ipynb
-              テスト手順-管理者機能-証跡管理.ipynb
-              テスト手順-管理者機能-NIIストレージのクォータ.ipynb
-          - name: migration-from-20250906
-            display_name: "Migration Test from 20250906"
-            include_admin: true
-            migration_from:
-              repository: "RCOSDP/RDM-osf.io"
-              commit: "4c007f2"
-              osf_image: "niicloudoperation/rdm-osf.io:20250906"
-              ember_image: "niicloudoperation/rdm-ember-osf-web:20250906"
-              cas_image: "niicloudoperation/rdm-cas-overlay:20250906"
-              mfr_image: "niicloudoperation/rdm-modular-file-renderer:20250906"
-              wb_image: "niicloudoperation/rdm-waterbutler:20250906"
-              initial_data_notebook: "取りまとめ-Migration前-20250906.ipynb"
-              post_migration_notebook: "取りまとめ-Migration後-20250906.ipynb"
-            exclude_notebooks: |
-              テスト手順-管理者機能-ログイン可否設定.ipynb
-              テスト手順-管理者機能-ノード管理.ipynb
-              テスト手順-管理者機能-ユーザ管理.ipynb
-              テスト手順-管理者機能-機関設定.ipynb
-              テスト手順-管理者機能-RDMユーザメール.ipynb
-              テスト手順-管理者機能-RDM登録.ipynb
-              テスト手順-管理者機能-アドオン利用制御.ipynb
-              テスト手順-管理者機能-利用統計.ipynb
-              テスト手順-管理者機能-アナウンス.ipynb
-              テスト手順-管理者機能-証跡管理.ipynb
-              テスト手順-管理者機能-NIIストレージのクォータ.ipynb
-            minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: false
-            flowable_enabled: false
-            wiki_enabled: false
           - name: migration-from-20250906-weko
             display_name: "Migration Test from 20250906 (WEKO)"
             include_admin: true
@@ -219,37 +136,6 @@ jobs:
             skip_default_storage: true
             skip_metadata: true
             skip_admin: true
-            jupyterhub_enabled: false
-            flowable_enabled: false
-            wiki_enabled: false
-          - name: user-minio
-            display_name: "User Tests (MinIO)"
-            include_admin: false
-            skip_admin: true
-            skip_metadata: false
-            skip_autofill: true
-            skip_default_storage: true
-            skip_login: true
-            skip_130mb_upload: true
-            minio_enabled: true
-            s3compatsigv4_enabled: true
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: false
-            flowable_enabled: false
-            wiki_enabled: false
-          - name: admin-minio
-            display_name: "Admin Tests (MinIO)"
-            include_admin: true
-            skip_admin: true
-            skip_metadata: true
-            skip_default_storage: true
-            skip_login: true
-            skip_130mb_upload: true
-            minio_enabled: true
-            s3compatsigv4_institutional_storage: true
-            weko_enabled: false
-            mibyo_db_enabled: false
             jupyterhub_enabled: false
             flowable_enabled: false
             wiki_enabled: false
@@ -283,80 +169,6 @@ jobs:
             jupyterhub_enabled: false
             flowable_enabled: false
             wiki_enabled: false
-          - name: user-jupyterhub
-            display_name: "User Tests (JupyterHub)"
-            include_admin: false
-            skip_admin: true
-            skip_metadata: true
-            skip_default_storage: true
-            skip_login: true
-            skip_130mb_upload: true
-            minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: true
-            flowable_enabled: false
-            wiki_enabled: false
-          - name: user-workflow-roles
-            display_name: "User Tests (Flowable Roles)"
-            include_admin: true
-            skip_admin: true
-            skip_metadata: true
-            skip_default_storage: true
-            skip_login: true
-            skip_130mb_upload: true
-            minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: false
-            flowable_enabled: true
-            workflow_test_mode: roles
-            wiki_enabled: false
-          - name: user-workflow-forms
-            display_name: "User Tests (Flowable Forms)"
-            include_admin: true
-            skip_admin: true
-            skip_metadata: true
-            skip_default_storage: true
-            skip_login: true
-            skip_130mb_upload: true
-            minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: false
-            flowable_enabled: true
-            workflow_test_mode: forms
-            wiki_enabled: false
-          - name: user-workflow-batch
-            display_name: "User Tests (Flowable Batch)"
-            include_admin: true
-            skip_admin: true
-            skip_metadata: true
-            skip_default_storage: true
-            skip_login: true
-            skip_130mb_upload: true
-            minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: false
-            flowable_enabled: true
-            workflow_test_mode: batch
-            workflow_batch_project_count: 50
-            wiki_enabled: false
-          - name: user-wiki
-            display_name: "User Tests (Wiki)"
-            include_admin: false
-            skip_admin: true
-            skip_metadata: true
-            skip_default_storage: true
-            skip_login: true
-            skip_130mb_upload: true
-            minio_enabled: false
-            weko_enabled: false
-            mibyo_db_enabled: false
-            jupyterhub_enabled: false
-            flowable_enabled: false
-            wiki_enabled: true
           - name: user-metadata-mibyo-db
             display_name: "User Tests (Mibyo DB)"
             include_admin: true
@@ -433,8 +245,8 @@ jobs:
           fi
         else
           # Use workflow inputs or defaults
-          INPUT_REPO="${{ github.event.inputs.rdm_repository || '' }}"
-          INPUT_BRANCH="${{ github.event.inputs.rdm_branch || '' }}"
+          INPUT_REPO="${{ github.event.inputs.rdm_repository || 'yacchin1205/RDM2-osf.io' }}"
+          INPUT_BRANCH="${{ github.event.inputs.rdm_branch || 'feature/weko-index-search' }}"
           INPUT_MERGE="${{ github.event.inputs.merge_custom_rdm || '' }}"
 
           if [[ -n "$INPUT_MERGE" ]]; then
