@@ -181,7 +181,6 @@ def deposit(key=None):
     if key is not None and (key not in records or records[key]['client'] != client):
         abort(404)
     review = registration['mode'] == 'workflow'
-    links = []
     pending = {}
     item_keys = {}
     with ZipFile(request.files['file'].stream) as bag:
@@ -189,6 +188,8 @@ def deposit(key=None):
         items = datasets(crate)
         if not items or (key is not None and len(items) != 1):
             abort(400)
+        # WEKO registers supporting datasets before the manuscript that links to them.
+        items.sort(key=lambda item: any(link['value'] == 'isSupplementedBy' for link in item.get('wk:itemLinks', [])))
         for item in items:
             identifier = key if key is not None else next(record_ids)
             item_keys[item['@id']] = identifier
@@ -219,14 +220,6 @@ def deposit(key=None):
             indices = item['wk:index']
             indices = indices if isinstance(indices, list) else [indices]
             pending[identifier] = dict(id=identifier, titles_by_language=translations, indices=[str(index) for index in indices], metadata=fields, public=not review, client=client, files=files)
-            links.append({'@id': url_for('item_page', key=identifier, _external=True), 'rel': ['alternate'], 'contentType': 'text/html'})
-            if review:
-                links.append({'@id': url_for('activity', key=identifier, _external=True),
-                              'rel': ['related'], 'contentType': 'text/html'})
-            record_url = url_for('item_page', key=identifier, _external=True)
-            for entry in file_entries:
-                links.append({'@id': entry['url']['url'], 'rel': ['http://purl.org/net/sword/3.0/terms/fileSetFile'],
-                              'contentType': entry['format'], 'derivedFrom': record_url})
     for item in items:
         record = pending[item_keys[item['@id']]]
         record['related'] = [item_keys[relation['identifier']] for relation in item.get('wk:itemLinks', [])
@@ -235,6 +228,8 @@ def deposit(key=None):
     if review:
         activities.update(dict.fromkeys(pending, False))
     state = 'inWorkflow' if review else 'ingested'
+    result_url = url_for('activity' if review else 'item_page', key=identifier, _external=True)
+    links = [{'@id': result_url, 'rel': ['alternate'], 'contentType': 'text/html'}]
     return jsonify({'@context': 'https://swordapp.github.io/swordv3/swordv3.jsonld',
                     '@type': 'ServiceDocument' if review else 'Status',
                     '@id': request.url_root + 'sword/deposit/' + str(identifier),
