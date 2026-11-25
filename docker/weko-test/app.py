@@ -149,7 +149,10 @@ activities = {}
 
 
 def api_record(record):
-    return {'id': record['id'], 'metadata': record['metadata'], 'updated': record['metadata']['updated']}
+    fields = record['metadata']
+    language = request.accept_languages.best_match(['ja', 'en']) or 'ja'
+    title = record['titles_by_language'].get(language, fields['item_title'])
+    return {'id': record['id'], 'metadata': dict(fields, title=[title]), 'updated': fields['updated']}
 
 
 @app.get('/api/index/')
@@ -187,7 +190,9 @@ def deposit(key=None):
             identifier = key if key is not None else max(records, default=2000000) + len(pending) + 1
             fields = metadata(item, registration['mapping'])
             title = item.get('dc:title', item.get('name', []))
-            titles = [t['value'] if isinstance(t, dict) else t for t in (title if isinstance(title, list) else [title])]
+            variants = title if isinstance(title, list) else [title]
+            translations = {v['language']: v['value'] for v in variants if isinstance(v, dict) and 'language' in v}
+            titles = [t['value'] if isinstance(t, dict) else t for t in variants]
             primary_title = item.get('name') or next(iter(titles), '')
             fields.update(item_title=primary_title, title=[primary_title], updated=datetime.now(timezone.utc).isoformat())
             files = {}
@@ -208,7 +213,7 @@ def deposit(key=None):
             fields[file_field] = {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': file_entries}
             indices = item['wk:index']
             indices = indices if isinstance(indices, list) else [indices]
-            pending[identifier] = dict(id=identifier, indices=[str(index) for index in indices], metadata=fields, public=not review, client=client, files=files)
+            pending[identifier] = dict(id=identifier, titles_by_language=translations, indices=[str(index) for index in indices], metadata=fields, public=not review, client=client, files=files)
             links.append({'@id': url_for('item_page', key=identifier, _external=True), 'rel': ['alternate'], 'contentType': 'text/html'})
             if review:
                 links.append({'@id': url_for('activity', key=identifier, _external=True),
@@ -235,11 +240,18 @@ def item_page(key):
         <button onclick="sessionStorage.setItem('wekoNotice','accepted');this.parentElement.hidden=true">That's ok</button></aside>
       <script>document.getElementById('test-notice').hidden = !!sessionStorage.getItem('wekoNotice')</script>
       <a href="/workflow/">WorkFlow</a><h1>{{record.metadata.title|join(' / ')}}</h1><p id="public_status_form">Public</p>
-      <a href="{{url_for('api_item',key=record.id)}}">JSON</a>
+      <a href="{{url_for('export_json',key=record.id)}}">JSON</a>
       {% for name in record.files %}<span class="filename"><a href="{{url_for('file_download',key=record.id,name=name)}}">{{name}}</a></span>{% endfor %}
       <table class="detail-table">{% for field in record.metadata.values() if field is mapping %}
       <tr><th>{{field.attribute_name}}</th><td class="multiple-line">{{field.get('attribute_value_mlt', field.get('attribute_value'))|tojson}}</td></tr>
       {% endfor %}</table>""", record=record)
+
+
+@app.get('/records/<int:key>/export/json')
+def export_json(key):
+    if key not in records or not records[key]['public']:
+        abort(404)
+    return jsonify(id=key, metadata=records[key]['metadata'])
 
 
 @app.get('/records/<int:key>/files/<path:name>')
