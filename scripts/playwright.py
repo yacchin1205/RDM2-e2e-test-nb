@@ -109,6 +109,18 @@ async def run_pw(f, last_path=default_last_path, screenshot=True, permissions=No
     if next_page is not None:
         current_pages.append(next_page)
     screenshot_path = os.path.join(temp_dir, 'screenshot.png')
+    if "/files/" in current_pages[-1].url:
+        info = await current_pages[-1].main_frame.evaluate_handle("""() => {
+            const host = window.__procedureMarker;
+            const canvas = host?.shadowRoot.querySelector('canvas');
+            return { url: location.pathname, root: document.documentElement.tagName,
+                     connected: host?.isConnected, style: host?.style.cssText,
+                     rect: canvas?.getBoundingClientRect().toJSON(),
+                     documentMatches: host?.ownerDocument === document,
+                     viewport: [innerWidth, innerHeight, devicePixelRatio] };
+        }""")
+        print("Recording layout:", await info.json_value())
+        await info.dispose()
     await current_pages[-1].screenshot(path=screenshot_path)
     return Image(screenshot_path)
 

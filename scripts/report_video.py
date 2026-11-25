@@ -37,6 +37,7 @@ INIT_SCRIPT = '''(() => {
         if (bars[x] === '1') ctx.fillRect(x, 0, 1, canvas.height);
       }
     }
+    window.__procedureMarker = host;
     return true;
   };
   window.__setReportQR = (bars) => { explicitlySet = true; return setQR(bars); };
