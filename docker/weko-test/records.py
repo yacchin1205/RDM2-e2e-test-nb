@@ -69,6 +69,8 @@ def metadata(dataset, mapping_id):
                 record_field['attribute_value'] = value
             else:
                 record_field['attribute_value_mlt'] = value if isinstance(value, list) else [value]
+            if field['path'] == 'hasPart':
+                record_field['attribute_type'] = 'file'
             if field['title'] == 'Creator':
                 record_field['attribute_type'] = 'creator'
             output[field['key']] = record_field
