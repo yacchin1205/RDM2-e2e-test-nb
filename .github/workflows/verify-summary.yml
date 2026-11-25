@@ -1,0 +1,59 @@
+name: Verify Excel summary artifact
+on:
+  push:
+    branches: [verify/excel-summary-video]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-group:
+          - name: user-workflow-forms
+    steps:
+    - name: Download the successful Flowable Forms result
+      uses: actions/download-artifact@v4
+      with:
+        github-token: ${{ github.token }}
+        run-id: 45526750477
+        artifact-ids: '14985364606'
+        merge-multiple: true
+        path: e2e-tests/result
+    - name: Upload Excel summary with screenshots and procedure videos
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-summary-excel-${{ matrix.test-group.name }}
+        path: |
+          e2e-tests/result/test-summary-*.xlsx
+          e2e-tests/result/screenshots/
+          e2e-tests/result/**/report.webm
+        retention-days: 30
+      id: excel-upload
+
+    - name: Download the published summary
+      uses: actions/download-artifact@v4
+      with:
+        name: test-summary-excel-user-workflow-forms
+        path: summary
+    - name: Compare paths and checksums with the E2E results
+      run: |
+        python3 - <<'PYTHON'
+        from pathlib import Path
+        from hashlib import sha256
+        root = Path('e2e-tests/result')
+        books = list(root.glob('test-summary-*.xlsx'))
+        videos = list(root.rglob('report.webm'))
+        images = [p for p in (root/'screenshots').rglob('*') if p.is_file()]
+        assert len(books) == 1 and len(videos) == 3 and images
+        wanted = {p.relative_to(root) for p in books + videos + images}
+        found = {p.relative_to('summary') for p in Path('summary').rglob('*') if p.is_file()}
+        assert wanted == found, wanted ^ found
+        for path in wanted:
+            assert sha256((root/path).read_bytes()).digest() == sha256((Path('summary')/path).read_bytes()).digest(), path
+        print(f'{len(books)} workbook, {len(videos)} procedure videos, {len(images)} screenshots verified')
+        for video in sorted(videos):
+            print(video.relative_to(root))
+        PYTHON
