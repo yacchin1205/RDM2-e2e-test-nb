@@ -184,15 +184,6 @@ jobs:
       matrix:
         test-group:
           - name: user-metadata
-            exclude_notebooks: |
-              テスト手順-Metadataアドオン-DOI補完-書誌情報.ipynb
-              テスト手順-Metadataアドオン-KAKEN情報を用いた自動補完-共著者の研究者番号.ipynb
-              テスト手順-Metadataアドオン-KAKEN情報を用いた自動補完-自分の研究者番号.ipynb
-              テスト手順-Metadataアドオン-複数メタデータの一括設定-書誌情報入力.ipynb
-              テスト手順-Metadataアドオン-複数メタデータの一括設定.ipynb
-              テスト手順-Metadataアドオン-非管理者での実行.ipynb
-              テスト手順-ストレージ共通-Metadataアドオン-書誌情報入力.ipynb
-              テスト手順-ストレージ共通-Metadataアドオン.ipynb
             display_name: "User Tests (Metadata)"
             include_admin: false
             skip_admin: true
