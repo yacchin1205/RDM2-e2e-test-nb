@@ -189,7 +189,7 @@ def deposit(key=None):
             title = item.get('dc:title', item.get('name', []))
             titles = [t['value'] if isinstance(t, dict) else t for t in (title if isinstance(title, list) else [title])]
             primary_title = item.get('name') or next(iter(titles), '')
-            fields.update(title=[primary_title], updated=datetime.now(timezone.utc).isoformat())
+            fields.update(item_title=primary_title, title=[primary_title], updated=datetime.now(timezone.utc).isoformat())
             files = {}
             file_field = next((f for f in fields if f.startswith('item_') and fields[f]['attribute_name'] == 'File'), 'item_files')
             file_metadata = fields.get(file_field, {}).get('attribute_value_mlt', [])
