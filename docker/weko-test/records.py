@@ -62,6 +62,12 @@ def metadata(dataset, mapping_id):
     for field in fields:
         value = mapped(field, dataset)
         if value is not None:
-            output[field['key']] = {'attribute_name': field['title'],
-                                    'attribute_value_mlt': value if isinstance(value, list) else [value]}
+            record_field = {'attribute_name': field['title']}
+            if field['key'] == 'pubdate':
+                record_field['attribute_value'] = value
+            else:
+                record_field['attribute_value_mlt'] = value if isinstance(value, list) else [value]
+            if field['title'] == 'Creator':
+                record_field['attribute_type'] = 'creator'
+            output[field['key']] = record_field
     return output

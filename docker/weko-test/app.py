@@ -8,7 +8,7 @@ from flask import Flask, abort, jsonify, redirect, render_template_string, reque
 
 from datetime import datetime, timezone
 from io import BytesIO
-from pathlib import PurePosixPath
+from uuid import uuid4
 from zipfile import ZipFile
 import json
 import mimetypes
@@ -177,39 +177,38 @@ def deposit(key=None):
         abort(404)
     review = registration['mode'] == 'workflow'
     links = []
+    pending = {}
     with ZipFile(request.files['file'].stream) as bag:
         crate = json.loads(bag.read('data/ro-crate-metadata.json'))
         items = datasets(crate)
-        if key is not None and len(items) != 1:
+        if not items or (key is not None and len(items) != 1):
             abort(400)
         for item in items:
-            identifier = key if key is not None else max(records, default=2000000) + 1
+            identifier = key if key is not None else max(records, default=2000000) + len(pending) + 1
             fields = metadata(item, registration['mapping'])
             title = item.get('dc:title', item.get('name', []))
             titles = [t['value'] if isinstance(t, dict) else t for t in (title if isinstance(title, list) else [title])]
             primary_title = item.get('name') or next(iter(titles), '')
             fields.update(title=[primary_title], updated=datetime.now(timezone.utc).isoformat())
-            for name in fields:
-                if name.startswith('item_') and '_creator' in name:
-                    fields[name]['attribute_type'] = 'creator'
             files = {}
-            for part in item.get('hasPart', []):
-                path = part['@id']
-                entry = 'data/' + path.removeprefix('./')
-                if entry in bag.namelist() and not entry.endswith('/'):
-                    files[PurePosixPath(path).name] = bag.read(entry)
-            file_field = next((f for f in fields if '_file' in f and f.startswith('item_')), 'item_files')
+            file_field = next((f for f in fields if f.startswith('item_') and fields[f]['attribute_name'] == 'File'), 'item_files')
+            file_metadata = fields.get(file_field, {}).get('attribute_value_mlt', [])
             file_entries = []
-            for filename in files:
-                file_entries.append({'filename': filename, 'version_id': str(identifier),
-                                     'format': mimetypes.guess_type(filename)[0] or 'application/octet-stream',
-                                     'url': {'url': url_for('file_download', key=identifier, name=filename, _external=True)}})
+            for pos, part in enumerate(item.get('hasPart', [])):
+                path = part['@id'].removeprefix('./')
+                if not path.startswith('files/'):
+                    continue
+                filename = path.removeprefix('files/')
+                files[filename] = bag.read('data/' + path)
+                entry = file_metadata[pos].copy() if pos < len(file_metadata) else {}
+                content_type = entry.get('format') or mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+                entry.update(filename=filename, version_id=str(uuid4()), format=content_type, mimetype=content_type,
+                             url={'url': url_for('file_download', key=identifier, name=filename, _external=True), 'label': filename})
+                file_entries.append(entry)
             fields[file_field] = {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': file_entries}
             indices = item['wk:index']
             indices = indices if isinstance(indices, list) else [indices]
-            records[identifier] = dict(id=identifier, indices=[str(index) for index in indices], metadata=fields, public=not review, client=client, files=files)
-            if review:
-                activities[identifier] = False
+            pending[identifier] = dict(id=identifier, indices=[str(index) for index in indices], metadata=fields, public=not review, client=client, files=files)
             links.append({'@id': url_for('item_page', key=identifier, _external=True), 'rel': ['alternate'], 'contentType': 'text/html'})
             if review:
                 links.append({'@id': url_for('activity', key=identifier, _external=True),
@@ -218,6 +217,9 @@ def deposit(key=None):
             for entry in file_entries:
                 links.append({'@id': entry['url']['url'], 'rel': ['http://purl.org/net/sword/3.0/terms/fileSetFile'],
                               'contentType': entry['format'], 'derivedFrom': record_url})
+    records.update(pending)
+    if review:
+        activities.update(dict.fromkeys(pending, False))
     state = 'inWorkflow' if review else 'ingested'
     return jsonify({'@id': request.url_root + 'sword/deposit/' + str(identifier),
                     'state': [{'@id': 'http://purl.org/net/sword/3.0/state/' + state}], 'links': links}), 201
@@ -236,7 +238,7 @@ def item_page(key):
       <a href="{{url_for('api_item',key=record.id)}}">JSON</a>
       {% for name in record.files %}<span class="filename"><a href="{{url_for('file_download',key=record.id,name=name)}}">{{name}}</a></span>{% endfor %}
       <table class="detail-table">{% for field in record.metadata.values() if field is mapping %}
-      <tr><th>{{field.attribute_name}}</th><td class="multiple-line">{{field.attribute_value_mlt|tojson}}</td></tr>
+      <tr><th>{{field.attribute_name}}</th><td class="multiple-line">{{field.get('attribute_value_mlt', field.get('attribute_value'))|tojson}}</td></tr>
       {% endfor %}</table>""", record=record)
 
 
