@@ -194,9 +194,8 @@ def deposit(key=None):
             translations = {v['language']: v['value'] for v in variants if isinstance(v, dict) and 'language' in v}
             titles = [t['value'] if isinstance(t, dict) else t for t in variants]
             primary_title = item.get('name') or next(iter(titles), '')
-            fields.update(item_title=primary_title, title=[primary_title], updated=datetime.now(timezone.utc).isoformat())
             files = {}
-            file_field = next((f for f in fields if f.startswith('item_') and fields[f]['attribute_name'] == 'File'), 'item_files')
+            file_field = next((f for f in fields if fields[f].get('attribute_type') == 'file'), 'item_files')
             file_metadata = fields.get(file_field, {}).get('attribute_value_mlt', [])
             file_entries = []
             for pos, part in enumerate(item.get('hasPart', [])):
@@ -210,7 +209,9 @@ def deposit(key=None):
                 entry.update(filename=filename, version_id=str(uuid4()), format=content_type, mimetype=content_type,
                              url={'url': url_for('file_download', key=identifier, name=filename, _external=True), 'label': filename})
                 file_entries.append(entry)
-            fields[file_field] = {'attribute_name': 'File', 'attribute_type': 'file', 'attribute_value_mlt': file_entries}
+            file_info = fields.setdefault(file_field, {'attribute_name': 'File', 'attribute_type': 'file'})
+            file_info['attribute_value_mlt'] = file_entries
+            fields.update(item_title=primary_title, title=[primary_title], updated=datetime.now(timezone.utc).isoformat())
             indices = item['wk:index']
             indices = indices if isinstance(indices, list) else [indices]
             pending[identifier] = dict(id=identifier, titles_by_language=translations, indices=[str(index) for index in indices], metadata=fields, public=not review, client=client, files=files)
