@@ -1,5 +1,6 @@
 # ユーティリティ関数群
 import asyncio
+import inspect
 from datetime import datetime
 import os
 import shutil
@@ -110,7 +111,9 @@ async def run_pw(f, last_path=default_last_path, screenshot=True, permissions=No
         current_pages.append(next_page)
     screenshot_path = os.path.join(temp_dir, 'screenshot.png')
     if "/files/" in current_pages[-1].url:
-        info = await current_pages[-1].main_frame.evaluate_handle("""() => {
+        frame = current_pages[-1].main_frame
+        evaluate = inspect.unwrap(type(frame).evaluate_handle)
+        info = await evaluate(frame, """() => {
             const host = window.__procedureMarker;
             const canvas = host?.shadowRoot.querySelector('canvas');
             return { url: location.pathname, root: document.documentElement.tagName,
