@@ -12,6 +12,7 @@ from uuid import uuid4
 from zipfile import ZipFile
 import json
 import mimetypes
+from itertools import count
 
 from flask import send_file
 from records import datasets, metadata
@@ -144,6 +145,7 @@ def tree():
                     {'id': '2', 'name': '別のインデックス' if language == 'ja' else 'Other Index', 'children': []}])
 
 
+record_ids = count(2000001)
 records = {}
 activities = {}
 
@@ -181,13 +183,15 @@ def deposit(key=None):
     review = registration['mode'] == 'workflow'
     links = []
     pending = {}
+    item_keys = {}
     with ZipFile(request.files['file'].stream) as bag:
         crate = json.loads(bag.read('data/ro-crate-metadata.json'))
         items = datasets(crate)
         if not items or (key is not None and len(items) != 1):
             abort(400)
         for item in items:
-            identifier = key if key is not None else max(records, default=2000000) + len(pending) + 1
+            identifier = key if key is not None else next(record_ids)
+            item_keys[item['@id']] = identifier
             fields = metadata(item, registration['mapping'])
             title = item.get('dc:title', item.get('name', []))
             variants = title if isinstance(title, list) else [title]
@@ -223,6 +227,10 @@ def deposit(key=None):
             for entry in file_entries:
                 links.append({'@id': entry['url']['url'], 'rel': ['http://purl.org/net/sword/3.0/terms/fileSetFile'],
                               'contentType': entry['format'], 'derivedFrom': record_url})
+    for item in items:
+        record = pending[item_keys[item['@id']]]
+        record['related'] = [item_keys[relation['identifier']] for relation in item.get('wk:itemLinks', [])
+                             if relation['identifier'] in item_keys]
     records.update(pending)
     if review:
         activities.update(dict.fromkeys(pending, False))
@@ -236,6 +244,7 @@ def item_page(key):
     record = records.get(key)
     if not record or not record['public']:
         abort(404)
+    related = [records[i] for i in record['related'] if i in records and records[i]['public']]
     return render_template_string("""
       <aside id="test-notice">WEKO test service
         <button onclick="sessionStorage.setItem('wekoNotice','accepted');this.parentElement.hidden=true">That's ok</button></aside>
@@ -243,9 +252,25 @@ def item_page(key):
       <a href="/workflow/">WorkFlow</a><h1>{{record.metadata.title|join(' / ')}}</h1><p id="public_status_form">Public</p>
       <a href="{{url_for('export_json',key=record.id)}}">JSON</a>
       {% for name in record.files %}<span class="filename"><a href="{{url_for('file_download',key=record.id,name=name)}}">{{name}}</a></span>{% endfor %}
-      <table class="detail-table">{% for field in record.metadata.values() if field is mapping %}
+      {% for other in related %}<a href="{{url_for('item_page',key=other.id)}}">{{other.metadata.item_title}}</a>{% endfor %}
+      {% if session.email == admin %}
+        <a id="btn_delete" href="#confirm-delete" onclick="document.getElementById('confirm-delete').hidden=false">Delete</a>
+        <form id="confirm-delete" hidden method="post" action="{{url_for('delete_item',key=record.id)}}">
+          <button id="confirm_delete_button" type="submit">Confirm deletion</button></form>
+      {% endif %}
+      <table class="detail-table">{% for field in record.metadata.values() if field is mapping and field.get('attribute_type') != 'file' %}
       <tr><th>{{field.attribute_name}}</th><td class="multiple-line">{{field.get('attribute_value_mlt', field.get('attribute_value'))|tojson}}</td></tr>
-      {% endfor %}</table>""", record=record)
+      {% endfor %}</table>""", record=record, related=related, admin=admin)
+
+
+@app.post('/records/<int:key>/delete')
+@administrator
+def delete_item(key):
+    if key not in records:
+        abort(404)
+    del records[key]
+    activities.pop(key, None)
+    return 'This item has been deleted'
 
 
 @app.get('/records/<int:key>/export/json')
