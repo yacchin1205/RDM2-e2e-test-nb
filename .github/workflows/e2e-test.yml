@@ -312,8 +312,11 @@ jobs:
     - name: Prepare WEKO test service
       if: env.WEKO_ENABLED == 'true' || env.MIBYO_DB_ENABLED == 'true'
       run: |
-        echo "WEKO_ADMIN_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
-        echo "WEKO_USER_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+        for role in ADMIN USER; do
+          password=$(openssl rand -hex 16)
+          echo "::add-mask::$password"
+          echo "WEKO_${role}_PASSWORD=$password" >> "$GITHUB_ENV"
+        done
         cp -r e2e-tests/docker/weko-test weko
         mkdir -p weko/nginx/keys
         openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
