@@ -618,7 +618,8 @@ async def click_wiki_menu_save(page, menu_list, transition_timeout=60000):
 
         raise ValueError(f"Menu item '{menu}' not found in wiki menu bar.")
 
-    await page.locator('//input[@type="submit" and @value="保存"]').click()
+    async with page.expect_navigation(timeout=transition_timeout):
+        await page.locator('#mEditorFooter input[type="submit"][value="保存"]').click()
     await expect(page.locator('//span[contains(@class, "title-text")]//b[contains(text(), "プロジェクトのWiki")]')).to_be_visible(timeout=transition_timeout)
 
 async def set_text_color(color_input, r, g, b):
