@@ -171,7 +171,6 @@ def create_workbook(all_test_sets, author, ticket_number, result_dir):
             sheet['C5'] = attrs.get('用意するテストデータ', '')
             sheet['C5'].alignment = Alignment(wrap_text=True)
             sheet['D4'] = 'テスト結果'
-            sheet['D5'] = '成功'  # Will be updated later based on test results
             sheet['E4'] = '関連チケットURL'
             sheet['E5'] = ticket_number
             sheet['F4'] = '担当'
@@ -253,6 +252,12 @@ def create_workbook(all_test_sets, author, ticket_number, result_dir):
                 sheet[f'C{row}'] = '\n'.join(cell['source'].split('\n')[1:]).strip()
                 sheet[f'D{row}'] = '■' if 'error' not in output_types and len(output_types) > 0 else '□'
                 sheet[f'E{row}'] = '' if 'error' not in output_types else '\n'.join([o['evalue'] if 'evalue' in o else o['ename'] for o in outputs if o['output_type'] == 'error'])
+                if 'error' not in output_types:
+                    for output in outputs:
+                        if 'rdm_skip_reason' in output.get('metadata', {}):
+                            sheet[f'D{row}'] = '□'
+                            sheet[f'E{row}'] = output['metadata']['rdm_skip_reason']
+                            break
                 sheet[f'F{row}'] = 'Playwright'
                 sheet[f'G{row}'] = datetime.now().strftime('%Y-%m-%d')
                 sheet[f'H{row}'] = ''
@@ -283,7 +288,7 @@ def create_workbook(all_test_sets, author, ticket_number, result_dir):
             summary_sheet[f'G{summaryrow}'] = title
             summary_sheet[f'H{summaryrow}'] = f'参照: {test_id}'
             summary_sheet[f'H{summaryrow}'].hyperlink = f'#{test_id}!A1'
-            summary_sheet[f'I{summaryrow}'] = '成功' if not has_error else '失敗'
+            summary_sheet[f'I{summaryrow}'] = sheet['D5'].value
             if video_warning.exists():
                 summary_sheet[f'M{summaryrow}'] = video_warning.read_text()
             summary_sheet[f'J{summaryrow}'] = ticket_number
