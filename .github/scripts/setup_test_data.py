@@ -1,8 +1,14 @@
 import os
 from django.utils import timezone
-from osf.models import OSFUser, Node, Institution
+from framework.auth import Auth
+from osf.models import OSFUser, Node, Institution, CollectionProvider, Collection, RegistrationProvider, RegistrationSchema, PreprintProvider, Preprint
+from osf.models.registrations import DraftRegistration
+from website import settings
 
 WIKI_ENABLED = os.environ.get('WIKI_ENABLED', 'false').lower() == 'true'
+INSTITUTIONAL_ADMIN_AUTHORIZATION_ENABLED = os.environ.get('INSTITUTIONAL_ADMIN_AUTHORIZATION_ENABLED', 'false').lower() == 'true'
+MAPCORE_GROUP_ENABLED = os.environ.get('MAPCORE_GROUP_ENABLED', 'false').lower() == 'true'
+SHIBBOLETH_ENABLED = os.environ.get('SHIBBOLETH_ENABLED', 'false').lower() == 'true'
 
 INSTITUTION_NAME = 'Virginia Tech [Test]'
 
@@ -68,7 +74,42 @@ test_users = [
         'institution': 'Massachusetts Institute of Technology [Test]',
         'skip_project': True,  # Dedicated user for project limit tests; no pre-created project
     },
+    {
+        'username': 'testuser6@example.com',
+        'fullname': 'Test User 6',
+        'given_name': 'Test',
+        'family_name': 'User 6',
+        'given_name_ja': 'テスト',
+        'family_name_ja': 'ユーザー6',
+        'password': 'testpass666',
+        'skip_project': True,
+    },
+    {
+        'username': 'testuser7@example.com',
+        'fullname': 'Test User 7',
+        'given_name': 'Test',
+        'family_name': 'User 7',
+        'given_name_ja': 'テスト',
+        'family_name_ja': 'ユーザー7',
+        'password': 'testpass123',
+        'is_superuser': True,
+        'skip_project': True,
+    },
 ]
+
+if SHIBBOLETH_ENABLED:
+    INSTITUTION_NAME = 'RDM E2E Institution'
+    Institution.objects.create(
+        _id='e2esh', name=INSTITUTION_NAME, domains=['e2e.test'],
+        logo_name='e2esh-shield.png',
+        email_domains=['example.com'], delegation_protocol='saml-shib',
+        login_url='http://192.168.168.167:18088/Shibboleth.sso/Login',
+    )
+    test_users = test_users[:3]
+    for user_data in test_users:
+        # Staff privileges must come from the IdP entitlement at login.
+        user_data['is_superuser'] = False
+        user_data['is_staff'] = False
 
 def create_rdmuserkey(user):
     # このスクリプトは `manage.py shell < file` で exec されるため、
@@ -121,6 +162,8 @@ for user_data in test_users:
             date_registered=timezone.now()
         )
         user.set_password(user_data['password'])
+        if SHIBBOLETH_ENABLED:
+            user.eppn = username.split('@')[0] + '@e2e.test'
         user.save()
         # Set additional fields after save
         user.is_registered = True
@@ -154,8 +197,8 @@ for user_data in test_users:
         user.emails.create(address=username)
         print(f"Created test user: {username}")
         
-        # Create user key (only needed when Wiki is enabled)
-        if WIKI_ENABLED:
+        # Federated login checks for an existing user key before allowing access.
+        if WIKI_ENABLED or SHIBBOLETH_ENABLED:
             create_rdmuserkey(user)
         
         # Skip project creation for dedicated CI users (e.g. project limit test user)
@@ -202,6 +245,70 @@ for user_data in test_users:
             print(f"PROJECT_ID_{username}: {project._id}")
             print(f"PROJECT_NAME_{username}: {project.title}")
 
+# Create groups for Mapcore group tests in CI
+# Only executed when running the user-mapcore-group test group (MAPCORE_GROUP_ENABLED=true)
+if MAPCORE_GROUP_ENABLED:
+    from osf.models.mapcore_group import MapCoreGroup
+    from osf.models.mapcore_user_group import MapCoreUserGroup
+
+    mapcore_groups_data = [
+        {
+            'group_id': 'GroupA',
+            'usernames': [
+                'teststaff@example.com',
+                'testuser2@example.com',
+            ],
+        },
+        {
+            'group_id': 'GroupB',
+            'usernames': [
+                'teststaff@example.com',
+                'testuser6@example.com',
+            ],
+        },
+        {
+            'group_id': 'GroupC',
+            'usernames': [
+                'teststaff@example.com',
+                'testuser4@example.com',
+            ],
+        },
+        {
+            'group_id': 'GroupD',
+            'usernames': [
+                'teststaff@example.com',
+                'testuser5@example.com',
+            ],
+        },
+    ]
+
+    for group_data in mapcore_groups_data:
+        group, created = MapCoreGroup.objects.get_or_create(_id=group_data['group_id'])
+        if created:
+            print(f"Created MapCoreGroup: {group._id}")
+        else:
+            print(f"MapCoreGroup already exists: {group._id}")
+
+        for username in group_data['usernames']:
+            user = OSFUser.objects.filter(username=username).first()
+            if user is None:
+                raise RuntimeError(f'MAPCORE setup failed: user not found: {username}')
+
+            user_group, created = MapCoreUserGroup.objects.get_or_create(
+                mapcore_group=group,
+                user=user,
+                defaults={'is_deleted': False},
+            )
+            if created:
+                print(f"Created MapCoreUserGroup: {user.username} -> {group._id}")
+            else:
+                if user_group.is_deleted:
+                    user_group.is_deleted = False
+                    user_group.save()
+                    print(f"Restored MapCoreUserGroup: {user.username} -> {group._id}")
+                else:
+                    print(f"MapCoreUserGroup already exists: {user.username} -> {group._id}")
+
 # Affiliate users with institution
 for user_data in test_users:
     user = OSFUser.objects.get(username=user_data['username'])
@@ -213,3 +320,133 @@ for user_data in test_users:
         print(f"Affiliated {user.username} with {inst.name}")
     else:
         print(f"User {user.username} already affiliated with {inst.name}")
+
+# Create provider/registration/preprint/collection data for institutional admin authorization CI tests
+# Only executed when running the "admin" test group (INSTITUTIONAL_ADMIN_AUTHORIZATION_ENABLED=true)
+if INSTITUTIONAL_ADMIN_AUTHORIZATION_ENABLED:
+    user = OSFUser.objects.filter(username='testuser2@example.com').first()
+    if user is None:
+        raise RuntimeError('Provider setup failed: user not found: testuser2@example.com')
+
+    print(f"USER_GUID_testuser2@example.com: {user._id}")
+
+    project = user.nodes.filter(category='project', is_deleted=False).first()
+    if project is None:
+        raise RuntimeError('Provider setup failed: project of user not found: testuser2@example.com')
+
+    # Create registration provider and link to a registration
+    REGISTRATION_PROVIDER_ID = 'osf'
+    REGISTRATION_PROVIDER_NAME = 'OSF Registries'
+
+    if not RegistrationProvider.objects.filter(_id=REGISTRATION_PROVIDER_ID).exists():
+        reg_provider = RegistrationProvider(
+            _id=REGISTRATION_PROVIDER_ID,
+            name=REGISTRATION_PROVIDER_NAME,
+        )
+        reg_provider._creator = user
+        reg_provider.save()
+        print(f"Created RegistrationProvider: {REGISTRATION_PROVIDER_ID}")
+    else:
+        reg_provider = RegistrationProvider.objects.get(_id=REGISTRATION_PROVIDER_ID)
+        print(f"RegistrationProvider already exists: {REGISTRATION_PROVIDER_ID}")
+
+    if reg_provider.registrations.count() == 0:
+        schema = RegistrationSchema.objects.filter(active=True).first()
+        if schema is None:
+            schema, created = RegistrationSchema.objects.get_or_create(
+                name='Test Schema',
+                schema_version=1,
+                defaults={
+                    'schema': {'pages': [], 'name': 'Test Schema'},
+                    'active': True,
+                }
+            )
+            if created:
+                print(f"Created RegistrationSchema: {schema.name} v{schema.schema_version}")
+            else:
+                schema.active = True
+                schema.save()
+                print(f"Activated existing RegistrationSchema: {schema.name} v{schema.schema_version}")
+        if not reg_provider.schemas.filter(id=schema.id).exists():
+            reg_provider.schemas.add(schema)
+            print(f"Linked schema '{schema.name}' to provider '{REGISTRATION_PROVIDER_ID}'")
+        auth = Auth(user=user)
+        original_archiver_setting = settings.ENABLE_ARCHIVER
+        settings.ENABLE_ARCHIVER = False
+        try:
+            draft = DraftRegistration.create_from_node(
+                user=user,
+                schema=schema,
+                node=project,
+                provider=reg_provider,
+            )
+            registration = draft.register(auth=auth, save=True)
+            print(f"Created Registration: {registration._id} linked to provider: {REGISTRATION_PROVIDER_ID}")
+        finally:
+            settings.ENABLE_ARCHIVER = original_archiver_setting
+    else:
+        print(f"Registration already linked to provider: {REGISTRATION_PROVIDER_ID}")
+
+    # Create preprint provider and link to a preprint
+    PREPRINT_PROVIDER_ID = 'osf'
+    PREPRINT_PROVIDER_NAME = 'Open Science Framework'
+
+    if not PreprintProvider.objects.filter(_id=PREPRINT_PROVIDER_ID).exists():
+        preprint_provider = PreprintProvider(
+            _id=PREPRINT_PROVIDER_ID,
+            name=PREPRINT_PROVIDER_NAME,
+        )
+        preprint_provider._creator = user
+        preprint_provider.save()
+        print(f"Created PreprintProvider: {PREPRINT_PROVIDER_ID}")
+    else:
+        preprint_provider = PreprintProvider.objects.get(_id=PREPRINT_PROVIDER_ID)
+        print(f"PreprintProvider already exists: {PREPRINT_PROVIDER_ID}")
+
+    if preprint_provider.preprints.count() == 0:
+        preprint = Preprint(
+            provider=preprint_provider,
+            title='Test Preprint',
+            creator=user,
+            description='Test preprint for setup',
+            is_public=True,
+        )
+        preprint.save()
+        print(f"Created Preprint: {preprint._id} linked to provider: {PREPRINT_PROVIDER_ID}")
+    else:
+        print(f"Preprint already linked to provider: {PREPRINT_PROVIDER_ID}")
+
+    # Create collection provider and add a project submission
+    COLLECTION_PROVIDER_ID = 'idtest'
+    COLLECTION_PROVIDER_NAME = 'OSF Collection'
+    if not CollectionProvider.objects.filter(_id=COLLECTION_PROVIDER_ID).exists():
+        provider = CollectionProvider(
+            _id=COLLECTION_PROVIDER_ID,
+            name=COLLECTION_PROVIDER_NAME,
+        )
+        provider._creator = user
+        provider.save()
+        print(f"Created CollectionProvider: {COLLECTION_PROVIDER_ID}")
+    else:
+        provider = CollectionProvider.objects.get(_id=COLLECTION_PROVIDER_ID)
+        print(f"CollectionProvider already exists: {COLLECTION_PROVIDER_ID}")
+
+    if not provider.primary_collection:
+        print(f"primary_collection not found for {COLLECTION_PROVIDER_ID}, creating manually...")
+        c = Collection(
+            title=f"{provider.name}'s Collection",
+            creator=user,
+            provider=provider,
+            is_promoted=True,
+            is_public=True,
+        )
+        c.save()
+        provider.primary_collection = c
+        provider.save()
+        print(f"Created primary_collection for {COLLECTION_PROVIDER_ID}")
+
+    if not provider.primary_collection.collectionsubmission_set.filter(guid=project.guids.first()).exists():
+        provider.primary_collection.collect_object(project, user)
+        print(f"Added project {project._id} to collection {COLLECTION_PROVIDER_ID}")
+    else:
+        print(f"Project {project._id} already in collection {COLLECTION_PROVIDER_ID}")
