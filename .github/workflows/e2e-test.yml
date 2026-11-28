@@ -417,7 +417,11 @@ jobs:
         git config user.email "RDM-e2e-test-nb@example.com"
         git merge --no-ff FETCH_HEAD -m "Merge ${MFR_BRANCH} for E2E tests"
 
-        docker build -t rdm-mfr:custom .
+        # The legacy Dockerfile's keyservers no longer serve gosu's signing key.
+        cp ../e2e-tests/.github/fixtures/gosu-1.10-signing-key.asc .
+        sed '/^RUN echo "deb /i COPY gosu-1.10-signing-key.asc /tmp/gosu-key.asc' Dockerfile |
+          sed '/^    \&\& for server in hkp:/,/^    ; done /c\    \&\& gpg --batch --import /tmp/gosu-key.asc \\' > Dockerfile.ci
+        docker build -f Dockerfile.ci -t rdm-mfr:custom .
         cd ..
         docker save -o prebuilt-images/rdm-mfr-custom.tar rdm-mfr:custom
 
