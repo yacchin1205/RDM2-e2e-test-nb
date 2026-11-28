@@ -7,9 +7,12 @@ import sys
 import tempfile
 import time
 import traceback
+from pathlib import Path
 
 from IPython.display import Image
 from playwright.async_api import async_playwright, expect
+
+from scripts.grdm import accept_terms, terms_banner
 
 playwright = None
 current_session_id = None
@@ -19,6 +22,7 @@ current_contexts = None
 default_last_path = None
 context_close_on_fail = True
 current_ignore_https_errors = False
+current_auto_accept_terms = True
 temp_dir = None
 console_messages = []
 
@@ -35,14 +39,19 @@ async def run_pw(f, last_path=default_last_path, screenshot=True, permissions=No
     global current_browser_type
     if current_browser is None:
         browser_type = current_browser_type or 'chromium'
+        browser_env = os.environ.copy()
+        if sys.platform.startswith('linux'):
+            browser_env['FONTCONFIG_FILE'] = str(Path(__file__).resolve().parents[1] / 'resources/browser-fonts.conf')
         if browser_type == 'firefox':
             current_browser = await playwright.firefox.launch(
                 headless=True,
+                env=browser_env,
                 args=[],
             )
         else:
             current_browser = await playwright.chromium.launch(
                 headless=True,
+                env=browser_env,
                 args=["--no-sandbox", "--disable-dev-shm-usage", "--lang=ja"],
             )
     
@@ -66,11 +75,20 @@ async def run_pw(f, last_path=default_last_path, screenshot=True, permissions=No
     current_context, current_pages = current_contexts[-1]
     if len(current_pages) == 0 or new_page:
         page = await current_context.new_page()
+        if current_auto_accept_terms:
+            banner = terms_banner(page)
+            await page.add_locator_handler(banner, accept_terms)
         page.on("console", lambda msg: console_messages.append({
             "timestamp": time.time(),
             "url": page.url,
             "type": msg.type,
             "text": msg.text
+        }))
+        page.on("pageerror", lambda error: console_messages.append({
+            "timestamp": time.time(),
+            "url": page.url,
+            "type": "pageerror",
+            "text": str(error)
         }))
         current_pages.append(page)
 
@@ -125,7 +143,8 @@ async def close_latest_page(last_path=None):
     current_contexts = current_contexts[:-1]
     await current_context.close()
 
-async def init_pw_context(close_on_fail=True, last_path=None, browser_type='chromium', ignore_https_errors=False):
+async def init_pw_context(close_on_fail=True, last_path=None, browser_type='chromium', ignore_https_errors=False, auto_accept_terms=True):
+    global current_auto_accept_terms
     global playwright, current_session_id, default_last_path, current_browser, current_browser_type, temp_dir, context_close_on_fail, current_ignore_https_errors, current_contexts, console_messages
     if current_browser is not None:
         await current_browser.close()
@@ -140,6 +159,7 @@ async def init_pw_context(close_on_fail=True, last_path=None, browser_type='chro
     current_session_id = datetime.now().strftime('%Y%m%d-%H%M%S')
     default_last_path = last_path or os.path.join(os.path.expanduser('~/last-screenshots'), current_session_id)
     temp_dir = tempfile.mkdtemp()
+    current_auto_accept_terms = auto_accept_terms
     context_close_on_fail = close_on_fail
     current_browser_type = browser_type
     current_ignore_https_errors = ignore_https_errors
@@ -214,7 +234,6 @@ async def _finish_pw_context(screenshot=False, last_path=None):
     if current_contexts is None or len(current_contexts) == 0:
         return
     current_context, current_pages = current_contexts[-1]
-    current_contexts = current_contexts[:-1]
     os.makedirs(last_path or default_last_path, exist_ok=True)
     timeout_on_screenshot = False
     if screenshot and current_pages is not None and len(current_pages) > 0:
@@ -226,6 +245,7 @@ async def _finish_pw_context(screenshot=False, last_path=None):
             timeout_on_screenshot = True
     if timeout_on_screenshot:
         return
+    current_contexts = current_contexts[:-1]
     pages = list(current_pages)
     for page in pages:
         if not page.is_closed():

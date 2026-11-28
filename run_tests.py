@@ -14,7 +14,9 @@ import traceback
 import subprocess
 import shutil
 from datetime import datetime
+from pathlib import Path
 import papermill as pm
+from scripts.video_engine import execute_notebook
 import nbformat
 
 
@@ -48,6 +50,11 @@ class TestRunner:
         self.skip_login = False
         self.enable_1gb_file_upload = False
         self.skip_autofill = False
+        self.binderhub_enabled = False
+        self.binderhub_binderhub_url = None
+        self.binderhub_use_default_server = False
+        self.jupyterhub_username = None
+        self.jupyterhub_password = None
         self.jupyterhub_enabled = False
         self.tljh_url = None
         self.tljh_username = None
@@ -62,6 +69,7 @@ class TestRunner:
         self.weko_user_password = None
         self.weko_institution_name = None
         self.weko_index_name = None
+        self.weko_index_name_ja = None
         self.weko_docker_compose_path = None
         self.sword_mapping_id = 30002
         self.mibyo_db_sword_mapping_id = 51000
@@ -70,17 +78,29 @@ class TestRunner:
         # S3CompatSigV4 specific parameters
         self.s3compatsigv4_enabled = False
         self.s3compatsigv4_institutional_storage_enabled = False
+        self.s3_institutional_storage_enabled = False
         # Workflow specific parameters
         self.workflow_enabled = False
         self.gateway_base_url = None
         # Wiki specific parameters
         self.wiki_enabled = False
+        self.skip_wiki_collaboration = False
+        # Institutional admin authorization test
+        self.institutional_admin_authorization_enabled = False
+        self.user_guid = None
+        self.user_name = None
+        self.registration_provider_name = None
+        self.preprint_provider_name = None
+        self.collection_provider_name = None
         # Member display specific parameters
         self.member_display_enabled = False
         # Workflow admin user parameters
         self.idp_name_integrated_admin = None
         self.idp_username_integrated_admin = None
         self.idp_password_integrated_admin = None
+        self.idp_username_integrated_admin_2 = None
+        self.idp_password_integrated_admin_2 = None
+        self.integrated_admin_user_name = None
         self.idp_name_institutional_admin = None
         self.idp_username_institutional_admin = None
         self.idp_password_institutional_admin = None
@@ -211,10 +231,10 @@ class TestRunner:
             subprocess.run(['df', '-h'])
         
         try:
-            pm.execute_notebook(
+            execute_notebook(
                 base_notebook,
                 result_notebook,
-                parameters=params
+                parameters=params, skip_failed_test=self.skip_failed_test
             )
             print(f'  Status: SUCCESS')
         except pm.PapermillExecutionError:
@@ -321,6 +341,8 @@ class TestRunner:
                     s3compat_type_name_1=getattr(self, 's3compat_type_name_1', None) if storage_id == 's3compat' else None,
                     s3compat_type_name_2=getattr(self, 's3compat_type_name_2', None) if storage_id == 's3compat' else None,
                     skip_too_many_files_check=storage_info.get('skip_too_many_files_check', False),
+                    check_multipart_upload=storage_info.get('check_multipart_upload', False),
+                    s3_verification_ca_bundle=storage_info.get('s3_verification_ca_bundle'),
                 )
             )
             
@@ -368,40 +390,45 @@ class TestRunner:
             )
         )
 
-    def run_s3compatsigv4_institutional_storage_tests(self):
-        """Run S3CompatSigV4 institutional storage tests."""
-        print('\n=== S3CompatSigV4 Institutional Storage Tests ===')
-        if not self.s3compatsigv4_institutional_storage_enabled:
-            print('Skipping S3CompatSigV4 institutional storage tests (s3compatsigv4_institutional_storage_enabled=false)')
+    def run_institutional_s3_tests(self):
+        if self.s3_institutional_storage_enabled:
+            params = {
+                'storage_provider': 's3',
+                's3_access_key': self.s3_access_key_1,
+                's3_secret_key': self.s3_secret_access_key_1,
+                's3_bucket': self.s3_test_bucket_name_1,
+                'expected_s3_region': self.s3_default_region_1,
+                'institutional_storage_name': 'Amazon S3 Storage',
+                'member_idp_username': self.idp_username_non_admin,
+                'member_idp_password': self.idp_password_non_admin,
+                'skip_130mb_upload': self.skip_130mb_upload,
+            }
+        elif self.s3compatsigv4_institutional_storage_enabled:
+            params = {
+                'storage_provider': 's3compatsigv4',
+                's3_endpoint_url': self.s3compatsigv4_inst_endpoint_url,
+                's3_access_key': self.s3compatsigv4_inst_access_key,
+                's3_secret_key': self.s3compatsigv4_inst_secret_key,
+                's3_bucket': self.s3compatsigv4_inst_bucket,
+            }
+        else:
             return
 
-        missing_params = [
-            name for name in [
-                's3compatsigv4_inst_endpoint_url',
-                's3compatsigv4_inst_access_key',
-                's3compatsigv4_inst_secret_key',
-                's3compatsigv4_inst_bucket',
-            ]
-            if not getattr(self, name, None)
-        ]
-        if missing_params:
-            print('Error: Missing S3CompatSigV4 institutional storage parameters: ' + ', '.join(missing_params))
-            sys.exit(1)
+        missing = [name for name, value in params.items() if value is None or value == '']
+        if missing:
+            raise ValueError('Missing institutional S3 test parameters: ' + ', '.join(missing))
 
         self.result_notebooks.append(
             self.run_notebook(
-                'テスト手順-管理者機能-S3CompatSigV4-機関ストレージ.ipynb',
+                '取りまとめ-機関ストレージ.ipynb',
                 admin_rdm_url=self.admin_rdm_url,
                 idp_name_1=self.idp_name_institutional_admin,
                 idp_username_1=self.idp_username_institutional_admin,
                 idp_password_1=self.idp_password_institutional_admin,
-                s3_endpoint_url=self.s3compatsigv4_inst_endpoint_url,
-                s3_access_key=self.s3compatsigv4_inst_access_key,
-                s3_secret_key=self.s3compatsigv4_inst_secret_key,
-                s3_bucket=self.s3compatsigv4_inst_bucket,
                 target_organization=getattr(self, 'admin_target_organization', None),
                 skip_failed_test=self.skip_failed_test,
                 exclude_notebooks=self.exclude_notebooks,
+                **params,
             )
         )
 
@@ -508,6 +535,23 @@ class TestRunner:
             )
         )
 
+    def run_binderhub_tests(self):
+        """Run the same OAuth BinderHub notebooks used for interactive acceptance tests."""
+        if not self.binderhub_enabled:
+            return
+        if not all((self.binderhub_binderhub_url, self.jupyterhub_username, self.jupyterhub_password)):
+            raise ValueError('BinderHub URL, JupyterHub username and password are required')
+        self.result_notebooks.append(self.run_notebook(
+            '取りまとめ-BinderHub-BinderHubアドオン.ipynb',
+            binderhub_binderhub_url=self.binderhub_binderhub_url,
+            binderhub_use_default_server=self.binderhub_use_default_server,
+            binderhub_auth_mode='jupyterhub',
+            jupyterhub_username=self.jupyterhub_username,
+            jupyterhub_password=self.jupyterhub_password,
+            skip_failed_test=self.skip_failed_test,
+            exclude_notebooks=self.exclude_notebooks,
+        ))
+
     def run_weko_tests(self):
         """Run WEKO addon tests."""
         print('\n=== WEKO Tests ===')
@@ -519,7 +563,7 @@ class TestRunner:
             name for name in [
                 'weko_url', 'weko_admin_email', 'weko_admin_password',
                 'weko_user_email', 'weko_user_password',
-                'weko_institution_name', 'weko_index_name',
+                'weko_institution_name', 'weko_index_name', 'weko_index_name_ja',
                 'weko_docker_compose_path'
             ]
             if not getattr(self, name, None)
@@ -539,6 +583,7 @@ class TestRunner:
                 weko_user_password=self.weko_user_password,
                 weko_institution_name=self.weko_institution_name,
                 weko_index_name=self.weko_index_name,
+                weko_index_name_ja=self.weko_index_name_ja,
                 weko_docker_compose_path=self.weko_docker_compose_path,
                 sword_mapping_id=self.sword_mapping_id,
                 weko_test_mode=self.weko_test_mode,
@@ -653,6 +698,7 @@ class TestRunner:
         self.result_notebooks.append(
             self.run_notebook(
                 '取りまとめ-Wiki操作.ipynb',
+                skip_wiki_collaboration=self.skip_wiki_collaboration,
                 skip_failed_test=self.skip_failed_test,
                 exclude_notebooks=self.exclude_notebooks,
             )
@@ -715,6 +761,60 @@ class TestRunner:
                 exclude_notebooks=self.exclude_notebooks,
             )
         )
+        
+    def run_institutional_admin_authorization_tests(self):
+        """Run institutional admin authorization tests."""
+        print('\n=== Institutional Admin Authorization Tests ===')
+
+        if not self.institutional_admin_authorization_enabled:
+            print('Skipping institutional admin authorization tests (institutional_admin_authorization_enabled=false)')
+            return
+
+        missing_params = [
+            name for name in [
+                'idp_name_integrated_admin',
+                'idp_username_integrated_admin',
+                'idp_password_integrated_admin',
+                'idp_username_integrated_admin_2',
+                'idp_password_integrated_admin_2',
+                'integrated_admin_user_name',
+                'idp_name_institutional_admin',
+                'idp_username_institutional_admin',
+                'idp_password_institutional_admin',
+                'user_guid',
+                'user_name',
+                'registration_provider_name',
+                'preprint_provider_name',
+                'collection_provider_name',
+            ]
+            if not getattr(self, name, None)
+        ]
+        if missing_params:
+            print('Error: Missing institutional admin authorization parameters: ' + ', '.join(missing_params))
+            sys.exit(1)
+
+        self.result_notebooks.append(
+            self.run_notebook(
+                '取りまとめ-管理者機能-機関管理者の適切な権限.ipynb',
+                admin_rdm_url=self.admin_rdm_url,
+                idp_name_integrated_admin=self.idp_name_integrated_admin,
+                idp_username_integrated_admin=self.idp_username_integrated_admin,
+                idp_password_integrated_admin=self.idp_password_integrated_admin,
+                idp_username_integrated_admin_2=self.idp_username_integrated_admin_2,
+                idp_password_integrated_admin_2=self.idp_password_integrated_admin_2,
+                integrated_admin_user_name=self.integrated_admin_user_name,
+                idp_name_institutional_admin=self.idp_name_institutional_admin,
+                idp_username_institutional_admin=self.idp_username_institutional_admin,
+                idp_password_institutional_admin=self.idp_password_institutional_admin,
+                user_guid=self.user_guid,
+                user_name=self.user_name,
+                registration_provider_name=self.registration_provider_name,
+                preprint_provider_name=self.preprint_provider_name,
+                collection_provider_name=self.collection_provider_name,
+                skip_failed_test=self.skip_failed_test,
+                exclude_notebooks=self.exclude_notebooks,
+            )
+        )
 
     def check_notebook_errors(self, notebook_path):
         """Check a notebook and all its sub-notebooks recursively for execution errors."""
@@ -740,6 +840,10 @@ class TestRunner:
                     'traceback': output.get('traceback', [])
                 })
         
+        video_warning = Path(notebook_path).with_suffix('') / 'report-video-error.txt'
+        if video_warning.exists():
+            all_errors.append({'notebook': notebook_path, 'cell': None, 'evalue': video_warning.read_text()})
+
         # Check notebooks/ subdirectory recursively
         base_path = os.path.splitext(notebook_path)[0]
         notebooks_dir = os.path.join(base_path, 'notebooks')
@@ -812,16 +916,18 @@ class TestRunner:
         self.run_login_tests()
         self.run_storage_tests()
         self.run_s3compatsigv4_tests()
-        self.run_s3compatsigv4_institutional_storage_tests()
+        self.run_institutional_s3_tests()
         self.run_metadata_tests()
         self.run_admin_tests()
         self.run_project_limit_tests()
         self.run_jupyterhub_tests()
+        self.run_binderhub_tests()
         self.run_weko_tests()
         self.run_mibyo_db_tests()
         self.run_workflow_tests()
         self.run_mapcore_group_tests()
         self.run_wiki_tests()
+        self.run_institutional_admin_authorization_tests()
         self.run_member_display_tests()
 
         result_notebooks = [result_notebook for result_notebook in self.result_notebooks if result_notebook is not None]
@@ -857,10 +963,14 @@ class TestRunner:
                     # Show relative path from result directory
                     rel_path = os.path.relpath(notebook_path, os.path.dirname(self.result_dir))
                     error_msg += f"\n{rel_path}:\n"
-                    for error in errors[:3]:  # Show first 3 errors per notebook
+                    step_errors = [error for error in errors if error['cell'] is not None]
+                    for error in step_errors[:3]:
                         error_msg += f"  - Cell {error['cell']}: {error['ename']}: {error['evalue']}\n"
-                    if len(errors) > 3:
-                        error_msg += f"  ... and {len(errors) - 3} more error(s)\n"
+                    if len(step_errors) > 3:
+                        error_msg += f"  ... and {len(step_errors) - 3} more error(s)\n"
+                    for error in errors:
+                        if error['cell'] is None:
+                            error_msg += f"  - {error['evalue']}\n"
                 
                 print(error_msg, file=sys.stderr)
                 raise RuntimeError(f"{len(notebooks_with_errors)} notebook(s) failed")
